@@ -34,5 +34,3 @@ if __name__ == "__main__":
         run(ticker)
         time.sleep(15)
 
-    
-
