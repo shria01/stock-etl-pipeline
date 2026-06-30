@@ -20,5 +20,5 @@ def get_sp500_symbols() -> pd.DataFrame:
         "GICS Sector": "sector",
     })[["ticker", "company", "sector"]]
 
-    logger.info(f"Fetched {len(df)} S&P 500 companies")
+    logger.info(f"Fetched {len(df)} S&P500 companies")
     return df

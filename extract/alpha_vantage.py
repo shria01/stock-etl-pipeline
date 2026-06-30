@@ -12,12 +12,7 @@ if not API_KEY:
     raise EnvironmentError("ALPHA_VANTAGE_API_KEY is not set")
 
 def get_daily_prices(ticker: str) -> Optional[dict]:
-    """
-    Fetches daily stock prices for a given ticker symbol from Alpha Vantage API.
-
-    Args:
-        ticker (str): The stock ticker symbol.
-    """
+    
     params = {
         "function": "TIME_SERIES_DAILY",
         "symbol": ticker,

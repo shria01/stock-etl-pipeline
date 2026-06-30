@@ -16,6 +16,16 @@ def get_engine():
     return create_engine(CONNECTION_STRING, pool_pre_ping=True)
 
 
+def get_all_tickers(engine):
+    sql = text("""
+        SELECT ticker FROM symbols
+    """)
+    with engine.connect() as conn:
+        output = conn.execute(sql)
+        tickers = [row[0] for row in output]
+    return tickers
+
+
 def upsert_symbols(engine, df) -> int:
     if df.empty:
         return 0
@@ -30,7 +40,6 @@ def upsert_symbols(engine, df) -> int:
         conn.execute(sql, new_dict)
     logger.info(f"Upserted {len(new_dict)} rows in symbols")
     return len(new_dict)
-
 
 
 def upsert_stock_prices(engine, df, ticker) -> int:
@@ -66,11 +75,10 @@ def upsert_moving_averages(engine, df, ticker) -> int:
     return len(new_dict)
 
 
-def log_etl_run(engine, ticker, status, rows_loaded, started_at, error_msg) :
+def log_etl_run(engine, ticker, status, rows_loaded, started_at, error_msg=None):
     sql = text("""
         INSERT INTO etl_runs (ticker, status, rows_loaded, error_msg, started_at)
         VALUES (:ticker, :status, :rows_loaded, :error_msg, :started_at)
     """)
     with engine.begin() as conn:
         conn.execute(sql,{"ticker": ticker, "status": status, "rows_loaded": rows_loaded, "error_msg": error_msg, "started_at": started_at})
-
