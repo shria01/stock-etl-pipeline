@@ -20,4 +20,10 @@ SELECT
     start_price,
     end_price,
     ROUND((end_price - start_price) / start_price, 4) AS quarterly_return
-FROM quarterly_prices;
+FROM quarterly_prices
+ON CONFLICT (ticker, quarter) DO UPDATE SET
+    start_price = EXCLUDED.start_price,
+    end_price = EXCLUDED.end_price,
+    quarterly_return = EXCLUDED.quarterly_return;
+
+    

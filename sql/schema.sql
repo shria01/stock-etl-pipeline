@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict DwzmibUc2yVt2ewAaWF0JZzHlF5IZAQVQT521HVEtZWPRKdyFOAQawfYiIgabme
+\restrict cShWbhht6lkc32GWZo6Q0g1cN1YpAf7btxW7Y8yUzp3PrZ6R4WcgmJ7245UwOPb
 
 -- Dumped from database version 15.18 (Debian 15.18-1.pgdg13+1)
 -- Dumped by pg_dump version 15.18 (Debian 15.18-1.pgdg13+1)
@@ -26,7 +26,7 @@ SET default_table_access_method = heap;
 -- Name: drop_events; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.drop_events (
+CREATE TABLE IF NOT EXISTS public.drop_events (
     id integer NOT NULL,
     ticker character varying(10) NOT NULL,
     drop_quarter date NOT NULL,
@@ -66,7 +66,7 @@ ALTER SEQUENCE public.drop_events_id_seq OWNED BY public.drop_events.id;
 -- Name: etl_runs; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.etl_runs (
+CREATE TABLE IF NOT EXISTS public.etl_runs (
     id integer NOT NULL,
     ticker character varying(10),
     status character varying(20),
@@ -102,7 +102,7 @@ ALTER SEQUENCE public.etl_runs_id_seq OWNED BY public.etl_runs.id;
 -- Name: moving_averages; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.moving_averages (
+CREATE TABLE IF NOT EXISTS public.moving_averages (
     id integer NOT NULL,
     ticker character varying(10) NOT NULL,
     calc_date date NOT NULL,
@@ -136,7 +136,7 @@ ALTER SEQUENCE public.moving_averages_id_seq OWNED BY public.moving_averages.id;
 -- Name: quarterly_returns; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.quarterly_returns (
+CREATE TABLE IF NOT EXISTS public.quarterly_returns (
     id integer NOT NULL,
     ticker character varying(10) NOT NULL,
     quarter date NOT NULL,
@@ -170,7 +170,7 @@ ALTER SEQUENCE public.quarterly_returns_id_seq OWNED BY public.quarterly_returns
 -- Name: stock_prices; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.stock_prices (
+CREATE TABLE IF NOT EXISTS public.stock_prices (
     id integer NOT NULL,
     ticker character varying(10) NOT NULL,
     price_date date NOT NULL,
@@ -207,7 +207,7 @@ ALTER SEQUENCE public.stock_prices_id_seq OWNED BY public.stock_prices.id;
 -- Name: symbols; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.symbols (
+CREATE TABLE IF NOT EXISTS public.symbols (
     id integer NOT NULL,
     ticker character varying(10) NOT NULL,
     company character varying(255),
@@ -367,6 +367,34 @@ ALTER TABLE ONLY public.symbols
 
 
 --
+-- Name: idx_drop_events_days_to_recovery; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX IF NOT EXISTS idx_drop_events_days_to_recovery ON public.drop_events USING btree (days_to_recovery);
+
+
+--
+-- Name: idx_drop_events_drop_pct; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX IF NOT EXISTS idx_drop_events_drop_pct ON public.drop_events USING btree (drop_pct);
+
+
+--
+-- Name: idx_quarterly_returns_return; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX IF NOT EXISTS idx_quarterly_returns_return ON public.quarterly_returns USING btree (quarterly_return);
+
+
+--
+-- Name: idx_stock_prices_date; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX IF NOT EXISTS idx_stock_prices_date ON public.stock_prices USING btree (price_date);
+
+
+--
 -- Name: drop_events drop_events_ticker_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -402,5 +430,5 @@ ALTER TABLE ONLY public.stock_prices
 -- PostgreSQL database dump complete
 --
 
-\unrestrict DwzmibUc2yVt2ewAaWF0JZzHlF5IZAQVQT521HVEtZWPRKdyFOAQawfYiIgabme
+\unrestrict cShWbhht6lkc32GWZo6Q0g1cN1YpAf7btxW7Y8yUzp3PrZ6R4WcgmJ7245UwOPb
 
