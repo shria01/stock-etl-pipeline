@@ -26,4 +26,5 @@ ON CONFLICT (ticker, quarter) DO UPDATE SET
     end_price = EXCLUDED.end_price,
     quarterly_return = EXCLUDED.quarterly_return;
 
-    
+
+   
