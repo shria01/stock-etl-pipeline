@@ -7,7 +7,8 @@ logger = logging.getLogger(__name__)
 
 def get_historical_prices(ticker: str, period: str = "10y") -> Optional[pd.DataFrame]:
     try:
-        stock = yf.Ticker(ticker)
+        yf_ticker = ticker.replace(".", "-")
+        stock = yf.Ticker(yf_ticker)
         df = stock.history(period=period)
         if df.empty:
             logger.error(f"[{ticker}] No data returned")
