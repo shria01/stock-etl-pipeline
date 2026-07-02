@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict Ll2NSWw3KNZSGmAT3EPjV0bc7cIiaOpdE5kBh4hbGOEM1gjy3hXKvG28dm9R3cN
+\restrict LnvaScZyIzbRyuMc5qbPt9bsiWqeEEdjGhG857v81mah1zr6i8gMbeY9Mj0kBND
 
 -- Dumped from database version 15.18 (Debian 15.18-1.pgdg13+1)
 -- Dumped by pg_dump version 15.18 (Debian 15.18-1.pgdg13+1)
@@ -26,7 +26,7 @@ SET default_table_access_method = heap;
 -- Name: drop_events; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.drop_events (
+CREATE TABLE IF NOT EXISTS public.drop_events (
     id integer NOT NULL,
     ticker character varying(10) NOT NULL,
     drop_quarter date NOT NULL,
@@ -39,7 +39,10 @@ CREATE TABLE public.drop_events (
     days_to_recovery integer,
     recovered_within_1yr boolean,
     max_drawdown_pct numeric(12,4),
-    trough_date date
+    trough_date date,
+    prior_90d_return numeric(8,4),
+    volume_change_pct numeric(8,4),
+    distance_from_52w_high numeric(8,4)
 );
 
 
@@ -67,7 +70,7 @@ ALTER SEQUENCE public.drop_events_id_seq OWNED BY public.drop_events.id;
 -- Name: etl_runs; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.etl_runs (
+CREATE TABLE IF NOT EXISTS public.etl_runs (
     id integer NOT NULL,
     ticker character varying(10),
     status character varying(20),
@@ -103,7 +106,7 @@ ALTER SEQUENCE public.etl_runs_id_seq OWNED BY public.etl_runs.id;
 -- Name: moving_averages; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.moving_averages (
+CREATE TABLE IF NOT EXISTS public.moving_averages (
     id integer NOT NULL,
     ticker character varying(10) NOT NULL,
     calc_date date NOT NULL,
@@ -137,7 +140,7 @@ ALTER SEQUENCE public.moving_averages_id_seq OWNED BY public.moving_averages.id;
 -- Name: quarterly_returns; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.quarterly_returns (
+CREATE TABLE IF NOT EXISTS public.quarterly_returns (
     id integer NOT NULL,
     ticker character varying(10) NOT NULL,
     quarter date NOT NULL,
@@ -171,7 +174,7 @@ ALTER SEQUENCE public.quarterly_returns_id_seq OWNED BY public.quarterly_returns
 -- Name: stock_prices; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.stock_prices (
+CREATE TABLE IF NOT EXISTS public.stock_prices (
     id integer NOT NULL,
     ticker character varying(10) NOT NULL,
     price_date date NOT NULL,
@@ -208,7 +211,7 @@ ALTER SEQUENCE public.stock_prices_id_seq OWNED BY public.stock_prices.id;
 -- Name: symbols; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.symbols (
+CREATE TABLE IF NOT EXISTS public.symbols (
     id integer NOT NULL,
     ticker character varying(10) NOT NULL,
     company character varying(255),
@@ -431,5 +434,5 @@ ALTER TABLE ONLY public.stock_prices
 -- PostgreSQL database dump complete
 --
 
-\unrestrict Ll2NSWw3KNZSGmAT3EPjV0bc7cIiaOpdE5kBh4hbGOEM1gjy3hXKvG28dm9R3cN
+\unrestrict LnvaScZyIzbRyuMc5qbPt9bsiWqeEEdjGhG857v81mah1zr6i8gMbeY9Mj0kBND
 
