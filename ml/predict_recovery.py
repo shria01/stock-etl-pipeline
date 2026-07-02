@@ -42,6 +42,10 @@ def prepare_features(df):
         'prior_90d_return', 'volume_change_pct', 'distance_from_52w_high'
     ]
     df = df.copy()
+
+    for col in numeric_cols:
+        df[f"{col}_missing"] = df[col].isna().astype(int)
+
     df[numeric_cols] = df[numeric_cols].fillna(df[numeric_cols].median())
     df['sector'] = df['sector'].fillna('Unknown')
     df = pd.get_dummies(df, columns=['sector'], drop_first=False)
@@ -94,7 +98,11 @@ def train_logistic_model(X_train, y_train, X_test, c=0.1):
     y_proba = log_model.predict_proba(X_test)[:, 1]
     return log_model, y_proba
 
-
+def show_logistic_coefficients(model, X):
+    coefs = model.named_steps['clf'].coef_[0]
+    coef_series = pd.Series(coefs, index=X.columns).sort_values(key=abs, ascending=False)
+    print("\nLogistic Regression coefficients (standardized):")
+    print(coef_series.head(10))
 
 def find_best_threshold(y_test, y_proba, thresholds=None):
     if thresholds is None:
@@ -181,6 +189,7 @@ if __name__ == "__main__":
     evaluate_model("Logistic Regression", y_test, log_proba, best_log_threshold)
 
     show_feature_importance(rf_model, X_train)
+    show_logistic_coefficients(log_model, X_train)
 
     print("\nRandom Forest probability buckets:")
     show_probability_buckets(y_test, rf_proba)

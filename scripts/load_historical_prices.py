@@ -17,10 +17,12 @@ def run(ticker, engine):
         if df_yf_prices is None:
             logger.error(f"[{ticker}] get_historical_prices failed")
             return
+        
         df_cleaned = parse_yfinance_prices(ticker, df_yf_prices)
         if df_cleaned is None:
             logger.error(f"[{ticker}] parse_yfinance_prices failed")
             return
+        
         ma_df = compute_moving_averages(df_cleaned, ticker)
         rows_loaded_sp = upsert_stock_prices(engine, df_cleaned, ticker)
         rows_loaded_ma = upsert_moving_averages(engine, ma_df, ticker)
