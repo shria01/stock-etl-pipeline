@@ -118,3 +118,65 @@ SET distance_from_52w_high = ROUND(
 )
 FROM rolling_high rh
 WHERE de.ticker = rh.ticker AND de.trough_date = rh.price_date;
+
+-- Feature: relative_drop_pct
+WITH sp500_quarterly AS(
+    SELECT DISTINCT 
+        DATE_TRUNC('quarter', price_date)::date AS quarter,
+        FIRST_VALUE(close) OVER (
+            PARTITION BY ticker, DATE_TRUNC('quarter', price_date)
+            ORDER BY price_date ASC
+        ) AS sp500_start,
+        FIRST_VALUE(close) OVER (
+            PARTITION BY ticker, DATE_TRUNC('quarter', price_date)
+            ORDER BY price_date DESC
+        ) AS sp500_end
+    FROM stock_prices
+    WHERE ticker = '^GSPC'
+)
+UPDATE drop_events de
+SET relative_drop_pct = ROUND(
+    de.drop_pct - ((sp.sp500_end - sp.sp500_start) / sp.sp500_start), 4
+)
+FROM sp500_quarterly sp
+WHERE de.drop_quarter = sp.quarter;
+
+--Feature:prior_90_day_return
+WITH sp500_prior_returns AS (
+    SELECT
+        price_date,
+        (close / NULLIF(LAG(close, 90) OVER (ORDER BY price_date), 0) - 1) AS sp500_90d_return,
+        ROW_NUMBER() OVER (
+            PARTITION BY DATE_TRUNC('quarter', price_date)
+            ORDER BY price_date ASC
+        ) AS day_rank
+    FROM stock_prices
+    WHERE ticker = '^GSPC'
+)
+UPDATE drop_events de
+SET relative_prior_90d_return = ROUND(de.prior_90d_return - spr.sp500_90d_return, 4)
+FROM sp500_prior_returns spr
+WHERE DATE_TRUNC('quarter', spr.price_date)::date = de.drop_quarter
+  AND spr.day_rank = 1
+  AND de.prior_90d_return is NOT NULL;
+
+
+-- Feature: sector_relative_drop_pct
+WITH sector_returns_ex_stock AS (
+    SELECT
+        de.id,
+        AVG(qr.quarterly_return) AS sector_avg_return_ex_stock
+    FROM drop_events de
+    JOIN symbols target_symbol ON de.ticker = target_symbol.ticker
+    JOIN symbols peer_symbol
+        ON target_symbol.sector = peer_symbol.sector
+       AND target_symbol.ticker <> peer_symbol.ticker
+    JOIN quarterly_returns qr
+        ON qr.ticker = peer_symbol.ticker
+       AND qr.quarter = de.drop_quarter
+    GROUP BY de.id
+)
+UPDATE drop_events de
+SET sector_relative_drop_pct = ROUND(de.drop_pct - sr.sector_avg_return_ex_stock, 4)
+FROM sector_returns_ex_stock sr
+WHERE de.id = sr.id;

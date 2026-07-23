@@ -1,9 +1,10 @@
+import joblib
 import pandas as pd
 from sqlalchemy import text
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import RandomForestClassifier, HistGradientBoostingClassifier
 from load.postgres import get_engine
 from sklearn.metrics import accuracy_score, classification_report
 from sklearn.metrics import roc_auc_score, average_precision_score, f1_score
@@ -21,6 +22,9 @@ def load_training_data():
             de.prior_90d_return,
             de.volume_change_pct,
             de.distance_from_52w_high,
+            de.relative_drop_pct,
+            de.relative_prior_90d_return,
+            de.sector_relative_drop_pct,
             CASE 
                 WHEN de.days_to_recovery IS NOT NULL 
                  AND de.days_to_recovery <= 180 
@@ -39,17 +43,19 @@ def load_training_data():
 def prepare_features(df):
     numeric_cols = [
         'drop_pct', 'max_drawdown_pct', 'volatility_90d',
-        'prior_90d_return', 'volume_change_pct', 'distance_from_52w_high'
+        'prior_90d_return', 'volume_change_pct', 'distance_from_52w_high',
+        'relative_drop_pct', 'relative_prior_90d_return', 'sector_relative_drop_pct'
     ]
     df = df.copy()
 
     for col in numeric_cols:
         df[f"{col}_missing"] = df[col].isna().astype(int)
 
-    df[numeric_cols] = df[numeric_cols].fillna(df[numeric_cols].median())
+    medi = df[numeric_cols].median()
+    df[numeric_cols] = df[numeric_cols].fillna(medians)
     df['sector'] = df['sector'].fillna('Unknown')
     df = pd.get_dummies(df, columns=['sector'], drop_first=False)
-    return df
+    return df, medi
 
 
 def time_based_split(df):
@@ -87,6 +93,16 @@ def train_random_forest(X_train, y_train, X_test):
     y_proba = model.predict_proba(X_test)[:, 1]
     return model, y_proba
 
+def train_gradient_boosting(X_train, y_train, X_test):
+    model = HistGradientBoostingClassifier(
+        max_iter=200,
+        learning_rate=0.05,
+        max_leaf_nodes=15,
+        random_state=42
+    )
+    model.fit(X_train, y_train)
+    y_proba = model.predict_proba(X_test)[:, 1]
+    return model, y_proba
 
 def train_logistic_model(X_train, y_train, X_test, c=0.1):
     log_model = Pipeline([
@@ -166,12 +182,14 @@ def show_probability_buckets(y_test, y_proba):
     )
     print(summary)
 
+#def predict_recovery(feature_dict: dict) -> float:
+
 
 if __name__ == "__main__":
     df = load_training_data()
     print(f"Loaded {len(df)} events")
 
-    df = prepare_features(df)
+    df, medi = prepare_features(df)
     X_train, X_test, y_train, y_test = time_based_split(df)
 
     print(f"Train: {len(X_train)} events")
@@ -187,6 +205,12 @@ if __name__ == "__main__":
     log_model, log_proba = train_logistic_model(X_train, y_train, X_test, c=best_c)
     best_log_threshold = find_best_threshold(y_test, log_proba)
     evaluate_model("Logistic Regression", y_test, log_proba, best_log_threshold)
+    joblib.dump({"model": log_model, "feature_columns": X_train.columns.tolist(), "medians": medi }, "ml/recovery_model.pkl")
+
+    # Gradient Boosting
+    gb_model, gb_proba = train_gradient_boosting(X_train, y_train, X_test)
+    best_gb_threshold = find_best_threshold(y_test, gb_proba)
+    evaluate_model("Gradient Boosting", y_test, gb_proba, best_gb_threshold)
 
     show_feature_importance(rf_model, X_train)
     show_logistic_coefficients(log_model, X_train)
