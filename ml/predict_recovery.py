@@ -9,6 +9,19 @@ from load.postgres import get_engine
 from sklearn.metrics import accuracy_score, classification_report
 from sklearn.metrics import roc_auc_score, average_precision_score, f1_score
 
+NUMERIC_COLS = [
+    'drop_pct', 'max_drawdown_pct', 'volatility_90d',
+    'prior_90d_return', 'volume_change_pct', 'distance_from_52w_high',
+    'relative_drop_pct', 'relative_prior_90d_return', 'sector_relative_drop_pct'
+]
+
+cached_model_data = None
+
+def get_model_data():
+    global cached_model_data
+    if cached_model_data is None:
+        cached_model_data = joblib.load("ml/recovery_model.pkl")
+    return cached_model_data
 
 def load_training_data():
     query = text("""
@@ -40,22 +53,19 @@ def load_training_data():
     return df
 
 
-def prepare_features(df):
-    numeric_cols = [
-        'drop_pct', 'max_drawdown_pct', 'volatility_90d',
-        'prior_90d_return', 'volume_change_pct', 'distance_from_52w_high',
-        'relative_drop_pct', 'relative_prior_90d_return', 'sector_relative_drop_pct'
-    ]
+def prepare_features(df, medians=None):
     df = df.copy()
 
-    for col in numeric_cols:
+    for col in NUMERIC_COLS:
         df[f"{col}_missing"] = df[col].isna().astype(int)
 
-    medi = df[numeric_cols].median()
-    df[numeric_cols] = df[numeric_cols].fillna(medians)
+    if medians is None:
+        medians = df[NUMERIC_COLS].median()
+
+    df[NUMERIC_COLS] = df[NUMERIC_COLS].fillna(medians)
     df['sector'] = df['sector'].fillna('Unknown')
     df = pd.get_dummies(df, columns=['sector'], drop_first=False)
-    return df, medi
+    return df, medians
 
 
 def time_based_split(df):
@@ -182,7 +192,20 @@ def show_probability_buckets(y_test, y_proba):
     )
     print(summary)
 
-#def predict_recovery(feature_dict: dict) -> float:
+def predict_recovery(feature_dict: dict) -> float:
+    data = get_model_data()
+    model = data["model"]
+    feature_columns = data["feature_columns"]
+    medians = data["medians"]
+
+    row = pd.DataFrame([feature_dict])
+    expected_raw_cols = NUMERIC_COLS + ['sector']
+    row = row.reindex(columns=row.columns.union(expected_raw_cols, sort=False), fill_value=pd.NA)
+    row, _ = prepare_features(row, medians=medians)
+    row = row.reindex(columns=feature_columns, fill_value=0)
+
+    prob = model.predict_proba(row)[:, 1][0]
+    return float(prob)
 
 
 if __name__ == "__main__":
