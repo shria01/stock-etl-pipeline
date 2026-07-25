@@ -64,10 +64,10 @@ def upsert_moving_averages(engine, df, ticker) -> int:
         return 0
     new_dict = df.to_dict("records")
     sql = text("""
-        INSERT INTO moving_averages (ticker, calc_date, ma_7, ma_30)
-        VALUES (:ticker, :calc_date, :ma_7, :ma_30)
+        INSERT INTO moving_averages (ticker, calc_date, ma_50, ma_200)
+        VALUES (:ticker, :calc_date, :ma_50, :ma_200)
         ON CONFLICT (ticker, calc_date) DO UPDATE SET 
-            ma_7=EXCLUDED.ma_7, ma_30=EXCLUDED.ma_30, updated_at=NOW()
+            ma_50=EXCLUDED.ma_50, ma_200=EXCLUDED.ma_200, updated_at=NOW()
     """)
     with engine.begin() as conn:
         conn.execute(sql, new_dict)

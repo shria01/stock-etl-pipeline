@@ -60,8 +60,8 @@ def compute_moving_averages(df: pd.DataFrame, ticker: str) -> pd.DataFrame:
     ma_df = pd.DataFrame()
     ma_df['calc_date'] = df['price_date'].values
     ma_df['ticker'] = ticker
-    ma_df['ma_7'] = df['close'].rolling(window=7, min_periods=1).mean().round(4)
-    ma_df['ma_30'] = df['close'].rolling(window=30, min_periods=1).mean().round(4)
+    ma_df['ma_50'] = df['close'].rolling(window=50, min_periods=1).mean().round(4)
+    ma_df['ma_200'] = df['close'].rolling(window=200, min_periods=1).mean().round(4)
     return ma_df
 
 

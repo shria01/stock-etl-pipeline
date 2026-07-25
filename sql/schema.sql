@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict LnvaScZyIzbRyuMc5qbPt9bsiWqeEEdjGhG857v81mah1zr6i8gMbeY9Mj0kBND
+\restrict zvwd1VHz7aP7NjQBKgoQ32EcskRyx720m9PAhZipartw2JHF37PJKzOIyZd3CFm
 
 -- Dumped from database version 15.18 (Debian 15.18-1.pgdg13+1)
 -- Dumped by pg_dump version 15.18 (Debian 15.18-1.pgdg13+1)
@@ -42,7 +42,10 @@ CREATE TABLE IF NOT EXISTS public.drop_events (
     trough_date date,
     prior_90d_return numeric(8,4),
     volume_change_pct numeric(8,4),
-    distance_from_52w_high numeric(8,4)
+    distance_from_52w_high numeric(8,4),
+    relative_drop_pct numeric(8,4),
+    relative_prior_90d_return numeric(8,4),
+    sector_relative_drop_pct numeric(8,4)
 );
 
 
@@ -110,9 +113,9 @@ CREATE TABLE IF NOT EXISTS public.moving_averages (
     id integer NOT NULL,
     ticker character varying(10) NOT NULL,
     calc_date date NOT NULL,
-    ma_7 numeric(12,4),
-    ma_30 numeric(12,4),
-    updated_at timestamp with time zone DEFAULT now() NOT NULL
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    ma_50 numeric(12,4),
+    ma_200 numeric(12,4)
 );
 
 
@@ -434,5 +437,5 @@ ALTER TABLE ONLY public.stock_prices
 -- PostgreSQL database dump complete
 --
 
-\unrestrict LnvaScZyIzbRyuMc5qbPt9bsiWqeEEdjGhG857v81mah1zr6i8gMbeY9Mj0kBND
+\unrestrict zvwd1VHz7aP7NjQBKgoQ32EcskRyx720m9PAhZipartw2JHF37PJKzOIyZd3CFm
 
