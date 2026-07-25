@@ -46,6 +46,12 @@ def load_training_data():
             END AS fast_recovery
         FROM drop_events de
         JOIN symbols s ON de.ticker = s.ticker
+        WHERE de.ticker != '^GSPC'
+          AND de.drop_quarter >= (
+              SELECT MAX(drop_quarter) - INTERVAL '10 years'
+              FROM drop_events
+              WHERE ticker != '^GSPC'
+          )
     """)
     engine = get_engine()
     with engine.connect() as conn:
@@ -68,25 +74,19 @@ def prepare_features(df, medians=None):
     return df, medians
 
 
-def time_based_split(df):
+def time_based_split_raw(df):
     df = df.copy()
     df['drop_quarter'] = pd.to_datetime(df['drop_quarter'])
     df = df.sort_values('drop_quarter')
 
-    cutoff = df['drop_quarter'].quantile(0.8)
+    train_cutoff = df['drop_quarter'].quantile(0.6)
+    val_cutoff = df['drop_quarter'].quantile(0.8)
 
-    train_df = df[df['drop_quarter'] < cutoff]
-    test_df = df[df['drop_quarter'] >= cutoff]
+    train_df = df[df['drop_quarter'] < train_cutoff]
+    val_df = df[(df['drop_quarter'] >= train_cutoff) & (df['drop_quarter'] < val_cutoff)]
+    test_df = df[df['drop_quarter'] >= val_cutoff]
 
-    feature_cols = [
-        c for c in df.columns
-        if c not in ('ticker', 'drop_quarter', 'fast_recovery')
-    ]
-
-    X_train, y_train = train_df[feature_cols], train_df['fast_recovery']
-    X_test, y_test = test_df[feature_cols], test_df['fast_recovery']
-
-    return X_train, X_test, y_train, y_test
+    return train_df, val_df, test_df
 
 
 def train_random_forest(X_train, y_train, X_test):
@@ -130,15 +130,15 @@ def show_logistic_coefficients(model, X):
     print("\nLogistic Regression coefficients (standardized):")
     print(coef_series.head(10))
 
-def find_best_threshold(y_test, y_proba, thresholds=None):
+def find_best_threshold(y_val, y_proba, thresholds=None):
     if thresholds is None:
         thresholds = [0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6]
 
     print("\nThreshold sweep:")
     best_threshold, best_f1 = 0.5, 0
     for t in thresholds:
-        y_pred_t = (y_proba >= t).astype(int)
-        f1 = f1_score(y_test, y_pred_t)
+        y_pred = (y_proba >= t).astype(int)
+        f1 = f1_score(y_val, y_pred)
         print(f"  Threshold {t}: F1 = {f1:.3f}")
         if f1 > best_f1:
             best_threshold, best_f1 = t, f1
@@ -147,16 +147,15 @@ def find_best_threshold(y_test, y_proba, thresholds=None):
     return best_threshold
 
 
-def sweep_logistic_regularization(X_train, y_train, X_test, y_test, threshold=0.5):
+def sweep_logistic_regularization(X_train, y_train, X_val, y_val, threshold=0.5):
     print("\nLogistic Regression regularization sweep:")
     best_c, best_f1 = 1.0, 0
 
     for c in [0.1, 0.5, 1.0, 2.0, 5.0]:
-        _, y_proba = train_logistic_model(X_train, y_train, X_test, c=c)
+        _, y_proba = train_logistic_model(X_train, y_train, X_val, c=c)
         y_pred = (y_proba >= threshold).astype(int)
-        f1 = f1_score(y_test, y_pred)
-        auc = roc_auc_score(y_test, y_proba)
-        print(f"  C={c}: F1 = {f1:.3f}, ROC AUC = {auc:.3f}")
+        f1 = f1_score(y_val, y_pred)
+        print(f"  C={c}: F1 = {f1:.3f}")
         if f1 > best_f1:
             best_c, best_f1 = c, f1
 
@@ -209,37 +208,59 @@ def predict_recovery(feature_dict: dict) -> float:
 
 
 if __name__ == "__main__":
-    df = load_training_data()
-    print(f"Loaded {len(df)} events")
+    raw_df = load_training_data()
+    print(f"Loaded {len(raw_df)} events")
 
-    df, medi = prepare_features(df)
-    X_train, X_test, y_train, y_test = time_based_split(df)
+    train_df, val_df, test_df = time_based_split_raw(raw_df)
+
+    train_df, medians = prepare_features(train_df)
+    val_df, _ = prepare_features(val_df, medians=medians)
+    test_df, _ = prepare_features(test_df, medians=medians)
+
+    val_df = val_df.reindex(columns=train_df.columns, fill_value=0)
+    test_df = test_df.reindex(columns=train_df.columns, fill_value=0)
+
+    feature_cols = [
+        c for c in train_df.columns
+        if c not in ('ticker', 'drop_quarter', 'fast_recovery')
+    ]
+
+    X_train, y_train = train_df[feature_cols], train_df['fast_recovery']
+    X_val, y_val = val_df[feature_cols], val_df['fast_recovery']
+    X_test, y_test = test_df[feature_cols], test_df['fast_recovery']
 
     print(f"Train: {len(X_train)} events")
+    print(f"Val:   {len(X_val)} events")
     print(f"Test:  {len(X_test)} events")
 
-    # Random Forest
-    rf_model, rf_proba = train_random_forest(X_train, y_train, X_test)
-    best_rf_threshold = find_best_threshold(y_test, rf_proba)
-    evaluate_model("Random Forest", y_test, rf_proba, best_rf_threshold)
 
-    # Logistic Regression
-    best_c = sweep_logistic_regularization(X_train, y_train, X_test, y_test)
-    log_model, log_proba = train_logistic_model(X_train, y_train, X_test, c=best_c)
-    best_log_threshold = find_best_threshold(y_test, log_proba)
-    evaluate_model("Logistic Regression", y_test, log_proba, best_log_threshold)
-    joblib.dump({"model": log_model, "feature_columns": X_train.columns.tolist(), "medians": medi }, "ml/recovery_model.pkl")
+    # Random Forest: report at default threshold 0.5, no threshold tuning as headline
+    rf_model, rf_test_proba = train_random_forest(X_train, y_train, X_test)
+    evaluate_model("Random Forest", y_test, rf_test_proba, threshold=0.5)
 
-    # Gradient Boosting
-    gb_model, gb_proba = train_gradient_boosting(X_train, y_train, X_test)
-    best_gb_threshold = find_best_threshold(y_test, gb_proba)
-    evaluate_model("Gradient Boosting", y_test, gb_proba, best_gb_threshold)
+    # Logistic Regression: tune C on validation only, report at default threshold 0.5
+    best_c = sweep_logistic_regularization(X_train, y_train, X_val, y_val)
+    log_model, log_test_proba = train_logistic_model(X_train, y_train, X_test, c=best_c)
+    evaluate_model("Logistic Regression", y_test, log_test_proba, threshold=0.5)
+
+    joblib.dump({
+        "model": log_model,
+        "feature_columns": X_train.columns.tolist(),
+        "medians": medians,
+        "threshold": 0.5,
+        "model_name": "logistic_regression",
+        "model_version": "v1"
+    }, "ml/recovery_model.pkl")
+
+    # Gradient Boosting: same, default threshold
+    gb_model, gb_test_proba = train_gradient_boosting(X_train, y_train, X_test)
+    evaluate_model("Gradient Boosting", y_test, gb_test_proba, threshold=0.5)
 
     show_feature_importance(rf_model, X_train)
     show_logistic_coefficients(log_model, X_train)
 
     print("\nRandom Forest probability buckets:")
-    show_probability_buckets(y_test, rf_proba)
+    show_probability_buckets(y_test, rf_test_proba)
 
     print("\nLogistic Regression probability buckets:")
-    show_probability_buckets(y_test, log_proba)
+    show_probability_buckets(y_test, log_test_proba)

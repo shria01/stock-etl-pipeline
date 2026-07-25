@@ -5,7 +5,7 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-def get_historical_prices(ticker: str, period: str = "10y") -> Optional[pd.DataFrame]:
+def get_historical_prices(ticker: str, period: str = "11y") -> Optional[pd.DataFrame]:
     try:
         yf_ticker = ticker.replace(".", "-")
         stock = yf.Ticker(yf_ticker)
