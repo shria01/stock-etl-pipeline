@@ -7,7 +7,7 @@ from pathlib import Path
 load_dotenv(Path(__file__).resolve().parent / ".env")
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
 
-if DATABASE_URL is None:
+if not DATABASE_URL:
     raise EnvironmentError("DATABASE_URL error")
 
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)

@@ -40,18 +40,19 @@ def load_training_data():
             de.sector_relative_drop_pct,
             CASE 
                 WHEN de.days_to_recovery IS NOT NULL 
-                 AND de.days_to_recovery <= 180 
+                    AND de.days_to_recovery <= 180 
                 THEN 1 
                 ELSE 0 
             END AS fast_recovery
         FROM drop_events de
         JOIN symbols s ON de.ticker = s.ticker
         WHERE de.ticker != '^GSPC'
-          AND de.drop_quarter >= (
-              SELECT MAX(drop_quarter) - INTERVAL '10 years'
-              FROM drop_events
-              WHERE ticker != '^GSPC'
-          )
+            AND de.relative_prior_90d_return IS NOT NULL
+            AND de.drop_quarter >= (
+                SELECT MAX(drop_quarter) - INTERVAL '10 years'
+                FROM drop_events
+                WHERE ticker != '^GSPC'
+            )
     """)
     engine = get_engine()
     with engine.connect() as conn:
@@ -191,11 +192,12 @@ def show_probability_buckets(y_test, y_proba):
     )
     print(summary)
 
-def predict_recovery(feature_dict: dict) -> float:
+def predict_recovery(feature_dict: dict) -> dict:
     data = get_model_data()
     model = data["model"]
     feature_columns = data["feature_columns"]
     medians = data["medians"]
+    threshold = data.get("threshold", 0.5)
 
     row = pd.DataFrame([feature_dict])
     expected_raw_cols = NUMERIC_COLS + ['sector']
@@ -203,9 +205,18 @@ def predict_recovery(feature_dict: dict) -> float:
     row, _ = prepare_features(row, medians=medians)
     row = row.reindex(columns=feature_columns, fill_value=0)
 
-    prob = model.predict_proba(row)[:, 1][0]
-    return float(prob)
+    prob = float(model.predict_proba(row)[:, 1][0])
+    return {
+        "probability": prob,
+        "threshold": threshold,
+        "predicted_fast_recovery": prob >= threshold
+    }
 
+def evaluate_majority_baseline(y_test):
+    y_pred = pd.Series(0, index=y_test.index)
+    print("\n=== Majority Class Baseline ===")
+    print(f"Accuracy: {accuracy_score(y_test, y_pred):.3f}")
+    print(classification_report(y_test, y_pred, zero_division=0))
 
 if __name__ == "__main__":
     raw_df = load_training_data()
@@ -233,7 +244,7 @@ if __name__ == "__main__":
     print(f"Val:   {len(X_val)} events")
     print(f"Test:  {len(X_test)} events")
 
-
+    evaluate_majority_baseline(y_test)
     # Random Forest: report at default threshold 0.5, no threshold tuning as headline
     rf_model, rf_test_proba = train_random_forest(X_train, y_train, X_test)
     evaluate_model("Random Forest", y_test, rf_test_proba, threshold=0.5)
