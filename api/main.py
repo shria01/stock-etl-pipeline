@@ -160,3 +160,9 @@ def get_drawdowns(ticker: str, db: Session = Depends(get_db)):
     """)
     result = db.execute(query, {"ticker": ticker}).mappings().all()
     return result
+
+@app.get("/api/tickers")
+def get_tickers(db: Session = Depends(get_db)):
+    query = text("SELECT ticker FROM symbols ORDER BY ticker")
+    result = db.execute(query).scalars().all()
+    return result
