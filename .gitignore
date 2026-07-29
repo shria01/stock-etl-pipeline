@@ -5,3 +5,4 @@ __pycache__/
 .vscode/
 api/.env
 *.pkl
+!ml/recovery_model.pkl
