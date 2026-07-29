@@ -17,7 +17,8 @@ class Prediction(Base):
     __tablename__ = "predictions"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    session_id = Column(String, nullable=True, index=True)
 
     sector = Column(String, nullable=True)
     drop_pct = Column(Float, nullable=True)

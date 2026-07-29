@@ -35,6 +35,7 @@ def login(credentials: UserLogin, db: Session = Depends(get_db)):
     return {"access_token": token, "token_type": "bearer"}
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/login")
+oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl="/api/login", auto_error=False)
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> User:
     payload = decode_access_token(token)
     if payload is None:
@@ -50,12 +51,27 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
 
     return user
 
+def get_current_user_optional(
+    token: str | None = Depends(oauth2_scheme_optional),
+    db: Session = Depends(get_db),
+) -> User | None:
+    if token is None:
+        return None
+    payload = decode_access_token(token)
+    if payload is None:
+        return None
+    user_id = payload.get("sub")
+    if user_id is None:
+        return None
+    return db.query(User).filter(User.id == int(user_id)).first()
+
+
 @app.get("/api/me", response_model=UserPublic)
 def read_me(current_user: User = Depends(get_current_user)):
     return current_user
 
 @app.post("/api/predict", response_model=PredictionResponse)
-def predict(request: PredictionRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def predict(request: PredictionRequest, db: Session = Depends(get_db), current_user: User | None = Depends(get_current_user_optional)):
     query = text("""
         SELECT de.ticker, s.sector, de.drop_pct, de.max_drawdown_pct,
                de.volatility_90d, de.prior_90d_return, de.volume_change_pct,
@@ -73,14 +89,25 @@ def predict(request: PredictionRequest, db: Session = Depends(get_db), current_u
     feature_dict = dict(result)
     ticker = feature_dict.pop("ticker")
     prediction = predict_recovery(feature_dict)
+    if current_user is not None:
+        new_prediction = Prediction(
+            user_id=current_user.id,
+            session_id=None,
+            sector=feature_dict.get("sector"),
+            drop_pct=feature_dict.get("drop_pct"),
+            predicted_probability=prediction["probability"],
+            model_version="v1",
+        )
+    else:
+        new_prediction = Prediction(
+            user_id=None,
+            session_id=request.session_id,
+            sector=feature_dict.get("sector"),
+            drop_pct=feature_dict.get("drop_pct"),
+            predicted_probability=prediction["probability"],
+            model_version="v1",
+        )
 
-    new_prediction = Prediction(
-        user_id=current_user.id,
-        sector=feature_dict.get("sector"),
-        drop_pct=feature_dict.get("drop_pct"),
-        predicted_probability=prediction["probability"],
-        model_version="v1",
-    )
     db.add(new_prediction)
     db.commit()
     return {
@@ -99,6 +126,14 @@ def get_my_predictions(db: Session = Depends(get_db), current_user: User = Depen
         .all()
     )
     return predictions
+
+@app.post("/api/predictions/claim")
+def claim_predictions(session_id: str, db: Session = Depends(get_db),current_user: User = Depends(get_current_user)):
+    result = db.query(Prediction).filter(Prediction.session_id == session_id,Prediction.user_id.is_(None)).update({"user_id": current_user.id, "session_id": None})
+    db.commit()
+    return {"claimed": result}
+
+
 
 @app.get("/api/sectors")
 def get_sectors(db: Session = Depends(get_db)):
