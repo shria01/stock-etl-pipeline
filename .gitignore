@@ -4,5 +4,6 @@ __pycache__/
 *.pyc
 .vscode/
 api/.env
+frontend/.env
 *.pkl
 !ml/recovery_model.pkl
