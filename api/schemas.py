@@ -34,6 +34,12 @@ class PredictionResponse(BaseModel):
     drop_event_id: int
     ticker: str
     sector: str | None
+    model_version: str
+    relative_drop_pct: float | None
+    max_drawdown_pct: float | None
+    distance_from_52w_high: float | None
+    volatility_90d: float | None
+    sector_relative_drop_pct: float | None
 
 class PredictionHistoryItem(BaseModel):
     id: int

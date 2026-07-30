@@ -198,6 +198,7 @@ def predict_recovery(feature_dict: dict) -> dict:
     feature_columns = data["feature_columns"]
     medians = data["medians"]
     threshold = data.get("threshold", 0.5)
+    model_version = data.get("model_version", "unknown")
 
     row = pd.DataFrame([feature_dict])
     expected_raw_cols = NUMERIC_COLS + ['sector']
@@ -209,7 +210,8 @@ def predict_recovery(feature_dict: dict) -> dict:
     return {
         "probability": prob,
         "threshold": threshold,
-        "predicted_fast_recovery": prob >= threshold
+        "predicted_fast_recovery": prob >= threshold,
+        "model_version": model_version
     }
 
 def evaluate_majority_baseline(y_test):
