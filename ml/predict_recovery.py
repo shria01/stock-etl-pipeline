@@ -9,6 +9,7 @@ from load.postgres import get_engine
 from sklearn.metrics import accuracy_score, classification_report
 from sklearn.metrics import roc_auc_score, average_precision_score, f1_score
 
+
 NUMERIC_COLS = [
     'drop_pct', 'max_drawdown_pct', 'volatility_90d',
     'prior_90d_return', 'volume_change_pct', 'distance_from_52w_high',
@@ -255,6 +256,15 @@ if __name__ == "__main__":
     best_c = sweep_logistic_regularization(X_train, y_train, X_val, y_val)
     log_model, log_test_proba = train_logistic_model(X_train, y_train, X_test, c=best_c)
     evaluate_model("Logistic Regression", y_test, log_test_proba, threshold=0.5)
+    test_auc = roc_auc_score(y_test, log_test_proba)
+    test_accuracy = accuracy_score(y_test, (log_test_proba >= 0.5).astype(int))
+    baseline_accuracy = accuracy_score(y_test, pd.Series(0, index=y_test.index))
+    top_coefficients = (
+        pd.Series(log_model.named_steps['clf'].coef_[0], index=X_train.columns)
+        .sort_values(key=abs, ascending=False)
+        .head(5)
+        .to_dict()
+    )
 
     joblib.dump({
         "model": log_model,
@@ -262,7 +272,15 @@ if __name__ == "__main__":
         "medians": medians,
         "threshold": 0.5,
         "model_name": "logistic_regression",
-        "model_version": "v1"
+        "model_version": "v1",
+        "metrics": {
+            "test_auc": round(test_auc, 4),
+            "test_accuracy": round(test_accuracy, 4),
+            "baseline_accuracy": round(baseline_accuracy, 4),
+            "top_coefficients": {k: round(v, 4) for k, v in top_coefficients.items()},
+            "training_events": len(X_train),
+            "test_events": len(X_test),
+        },
     }, "ml/recovery_model.pkl")
 
     # Gradient Boosting: same, default threshold

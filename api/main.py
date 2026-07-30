@@ -7,7 +7,7 @@ from api.security import hash_password, verify_password, create_access_token, de
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy import text
-from ml.predict_recovery import predict_recovery
+from ml.predict_recovery import predict_recovery, get_model_data
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import timedelta
 
@@ -242,4 +242,14 @@ def get_drawdown_prices(event_id: int, db: Session = Depends(get_db)):
         "recovered_date": event.recovered_date,
         "days_to_recovery": event.days_to_recovery,
         "prices": prices,
+    }
+
+@app.get("/api/model-info")
+def get_model_info():
+    data = get_model_data()
+    return {
+        "model_name": data.get("model_name"),
+        "model_version": data.get("model_version"),
+        "threshold": data.get("threshold"),
+        "metrics": data.get("metrics"),
     }
