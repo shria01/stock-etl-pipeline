@@ -37,6 +37,7 @@ class PredictionResponse(BaseModel):
 
 class PredictionHistoryItem(BaseModel):
     id: int
+    drop_event_id: int | None
     sector: str | None
     drop_pct: float
     predicted_probability: float

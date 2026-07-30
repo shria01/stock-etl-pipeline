@@ -163,6 +163,19 @@ def get_drawdowns(ticker: str, db: Session = Depends(get_db)):
     result = db.execute(query, {"ticker": ticker}).mappings().all()
     return result
 
+@app.get("/api/drawdowns/{event_id}")
+def get_drawdowns_by_id(event_id: int, db: Session = Depends(get_db)):
+    query = text("""
+        SELECT de.id, de.ticker, de.drop_quarter, de.drop_pct,
+               de.max_drawdown_pct, de.days_to_recovery, de.recovered_within_1yr
+        FROM drop_events de
+        WHERE de.id = :event_id
+    """)
+    result = db.execute(query, {"event_id": event_id}).mappings().first()
+    if result is None:
+        raise HTTPException(status_code=404, detail="Event not found")
+    return result
+
 @app.get("/api/tickers")
 def get_tickers(db: Session = Depends(get_db)):
     query = text("SELECT ticker FROM symbols ORDER BY ticker")
