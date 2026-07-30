@@ -31,6 +31,9 @@ def include_object(object, name, type_, reflected, compare_to):
     if type_ == "table" and reflected and compare_to is None:
         # existing table not in our metadata — leave it alone
         return False
+    table_name = name if type_ == "table" else getattr(getattr(object, "table", None), "name", None)
+    if table_name == "drop_events":
+        return False
     return True
 
 def run_migrations_offline() -> None:

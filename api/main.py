@@ -81,7 +81,7 @@ def read_me(current_user: User = Depends(get_current_user)):
 @app.post("/api/predict", response_model=PredictionResponse)
 def predict(request: PredictionRequest, db: Session = Depends(get_db), current_user: User | None = Depends(get_current_user_optional)):
     query = text("""
-        SELECT de.ticker, s.sector, de.drop_pct, de.max_drawdown_pct,
+        SELECT de.id, de.ticker, s.sector, de.drop_pct, de.max_drawdown_pct,
                de.volatility_90d, de.prior_90d_return, de.volume_change_pct,
                de.distance_from_52w_high, de.relative_drop_pct,
                de.relative_prior_90d_return, de.sector_relative_drop_pct
@@ -101,6 +101,7 @@ def predict(request: PredictionRequest, db: Session = Depends(get_db), current_u
         new_prediction = Prediction(
             user_id=current_user.id,
             session_id=None,
+            drop_event_id=feature_dict.get("id"),
             sector=feature_dict.get("sector"),
             drop_pct=feature_dict.get("drop_pct"),
             predicted_probability=prediction["probability"],
@@ -110,6 +111,7 @@ def predict(request: PredictionRequest, db: Session = Depends(get_db), current_u
         new_prediction = Prediction(
             user_id=None,
             session_id=request.session_id,
+            drop_event_id=feature_dict.get("id"),
             sector=feature_dict.get("sector"),
             drop_pct=feature_dict.get("drop_pct"),
             predicted_probability=prediction["probability"],

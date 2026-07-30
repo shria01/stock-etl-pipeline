@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Float
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Float, Table
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
 from api.database import Base
@@ -13,12 +13,19 @@ class User(Base):
 
     predictions = relationship("Prediction", back_populates="user")
 
+
+drop_events = Table(
+    "drop_events",
+    Base.metadata,
+    Column("id", Integer, primary_key=True),
+)
 class Prediction(Base):
     __tablename__ = "predictions"
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     session_id = Column(String, nullable=True, index=True)
+    drop_event_id = Column(Integer, ForeignKey("drop_events.id"), nullable=True, index=True)
 
     sector = Column(String, nullable=True)
     drop_pct = Column(Float, nullable=True)
