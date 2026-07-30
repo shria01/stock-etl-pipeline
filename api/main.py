@@ -186,3 +186,22 @@ def get_tickers(db: Session = Depends(get_db)):
     query = text("SELECT ticker FROM symbols ORDER BY ticker")
     result = db.execute(query).scalars().all()
     return result
+
+@app.get("/api/sectors/{sector}/benchmark")
+def get_sector_benchmark(sector: str, db: Session = Depends(get_db)):
+    query = text("""
+        SELECT
+            s.sector,
+            COUNT(*) AS total_events,
+            AVG(CASE WHEN de.days_to_recovery IS NOT NULL AND de.days_to_recovery <= 180 THEN 1.0 ELSE 0.0 END) AS sector_fast_recovery_rate,
+            PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY de.days_to_recovery) FILTER (WHERE de.days_to_recovery IS NOT NULL) AS median_days_to_recovery
+        FROM drop_events de
+        JOIN symbols s ON de.ticker = s.ticker
+        WHERE s.sector = :sector
+        GROUP BY s.sector
+    """)
+    result = db.execute(query, {"sector": sector}).mappings().first()  
+    if result is None:
+        raise HTTPException(status_code=404, detail="No data for this sector")
+
+    return result
