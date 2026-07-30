@@ -9,6 +9,7 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy import text
 from ml.predict_recovery import predict_recovery
 from fastapi.middleware.cors import CORSMiddleware
+from datetime import timedelta
 
 app = FastAPI()
 app.add_middleware(
@@ -205,3 +206,40 @@ def get_sector_benchmark(sector: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="No data for this sector")
 
     return result
+
+@app.get("/api/drawdowns/{event_id}/prices")
+def get_drawdown_prices(event_id: int, db: Session = Depends(get_db)):
+    event_query = text("""
+        SELECT ticker, trough_date, baseline_price, trough_price, recovered_date, days_to_recovery
+        FROM drop_events
+        WHERE id = :event_id
+    """)
+    event = db.execute(event_query, {"event_id": event_id}).first()
+    if event is None:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    start_date = event.trough_date - timedelta(days=90)
+    if event.days_to_recovery is not None and event.days_to_recovery > 180:
+        window_days = event.days_to_recovery + 14
+    else:
+        window_days = 180
+    end_date = event.trough_date + timedelta(days=window_days)
+
+    prices_query = text("""
+        SELECT price_date, close
+        FROM stock_prices
+        WHERE ticker = :ticker
+          AND price_date BETWEEN :start_date AND :end_date
+        ORDER BY price_date
+    """)
+    prices = db.execute(prices_query, {"ticker": event.ticker, "start_date": start_date, "end_date": end_date}).mappings().all()
+
+    return {
+        "ticker": event.ticker,
+        "trough_date": event.trough_date,
+        "baseline_price": event.baseline_price,
+        "trough_price": event.trough_price,
+        "recovered_date": event.recovered_date,
+        "days_to_recovery": event.days_to_recovery,
+        "prices": prices,
+    }
