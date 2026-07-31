@@ -130,7 +130,8 @@ def predict(request: PredictionRequest, db: Session = Depends(get_db), current_u
         "max_drawdown_pct": feature_dict.get("max_drawdown_pct"),
         "distance_from_52w_high": feature_dict.get("distance_from_52w_high"),
         "volatility_90d": feature_dict.get("volatility_90d"),
-        "sector_relative_drop_pct": feature_dict.get("sector_relative_drop_pct")
+        "sector_relative_drop_pct": feature_dict.get("sector_relative_drop_pct"),
+        "prior_90d_return": feature_dict.get("prior_90d_return")
     }
 
 @app.get("/api/predictions/me", response_model=list[PredictionHistoryItem])

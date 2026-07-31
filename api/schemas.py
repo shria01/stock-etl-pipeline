@@ -40,6 +40,7 @@ class PredictionResponse(BaseModel):
     distance_from_52w_high: float | None
     volatility_90d: float | None
     sector_relative_drop_pct: float | None
+    prior_90d_return: float | None 
 
 class PredictionHistoryItem(BaseModel):
     id: int
