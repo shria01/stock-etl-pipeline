@@ -134,15 +134,36 @@ def predict(request: PredictionRequest, db: Session = Depends(get_db), current_u
         "prior_90d_return": feature_dict.get("prior_90d_return")
     }
 
-@app.get("/api/predictions/me", response_model=list[PredictionHistoryItem])
-def get_my_predictions(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    predictions = (
-        db.query(Prediction)
-        .filter(Prediction.user_id == current_user.id)
-        .order_by(Prediction.created_at.desc())
-        .all()
-    )
-    return predictions
+@app.get("/api/predictions/me")
+def get_my_predictions(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    query = text("""
+        SELECT
+            p.id,
+            p.user_id,
+            p.session_id,
+            p.drop_event_id,
+            p.sector,
+            p.drop_pct,
+            p.predicted_probability,
+            p.model_version,
+            p.created_at,
+
+            de.ticker,
+            de.drop_quarter,
+            de.days_to_recovery,
+            de.recovered_within_1yr
+        FROM predictions p
+        LEFT JOIN drop_events de
+            ON p.drop_event_id = de.id
+        WHERE p.user_id = :user_id
+        ORDER BY p.created_at DESC
+    """)
+
+    rows = db.execute(query, {"user_id": current_user.id}).mappings().all()
+    return [dict(row) for row in rows]
 
 @app.post("/api/predictions/claim")
 def claim_predictions(session_id: str, db: Session = Depends(get_db),current_user: User = Depends(get_current_user)):
