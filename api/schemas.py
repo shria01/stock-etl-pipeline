@@ -36,7 +36,8 @@ class PredictionResponse(BaseModel):
     sector: str | None
     model_version: str
     relative_drop_pct: float | None
-    max_drawdown_pct: float | None
+    event_max_drawdown_pct: float | None
+    drawdown_velocity_pct_per_day: float | None
     distance_from_52w_high: float | None
     volatility_90d: float | None
     sector_relative_drop_pct: float | None
@@ -53,6 +54,4 @@ class PredictionHistoryItem(BaseModel):
 
     class Config:
             from_attributes = True
-
-
 

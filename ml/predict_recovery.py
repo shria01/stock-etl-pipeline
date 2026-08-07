@@ -1,4 +1,5 @@
 import joblib
+import numpy as np
 import pandas as pd
 from sqlalchemy import text
 from sklearn.linear_model import LogisticRegression
@@ -7,14 +8,28 @@ from sklearn.pipeline import Pipeline
 from sklearn.ensemble import RandomForestClassifier, HistGradientBoostingClassifier
 from load.postgres import get_engine
 from sklearn.metrics import accuracy_score, classification_report
-from sklearn.metrics import roc_auc_score, average_precision_score, f1_score
+from sklearn.metrics import (
+    roc_auc_score, average_precision_score, f1_score, precision_score, recall_score,
+    balanced_accuracy_score
+)
 
 
 NUMERIC_COLS = [
-    'drop_pct', 'max_drawdown_pct', 'volatility_90d',
+    'drop_pct', 'event_max_drawdown_pct', 'drawdown_velocity_pct_per_day', 'volatility_90d',
     'prior_90d_return', 'volume_change_pct', 'distance_from_52w_high',
-    'relative_drop_pct', 'relative_prior_90d_return', 'sector_relative_drop_pct'
+    'relative_drop_pct', 'relative_prior_90d_return', 'sector_relative_drop_pct',
+    'sp500_volatility_90d', 'sp500_return_20d', 'sp500_return_90d',
+    'sp500_distance_from_52w_high', 'market_breadth_below_200d'
 ]
+
+MARKET_REGIME_COLS = {
+    'sp500_volatility_90d', 'sp500_return_20d', 'sp500_return_90d',
+    'sp500_distance_from_52w_high', 'market_breadth_below_200d'
+}
+
+NON_FEATURE_COLS = {
+    'ticker', 'drop_quarter', 'prediction_date', 'label_end_date', 'fast_recovery'
+}
 
 cached_model_data = None
 
@@ -29,9 +44,12 @@ def load_training_data():
         SELECT
             de.ticker,
             de.drop_quarter,
+            de.prediction_date,
+            de.label_end_date,
             s.sector,
             de.drop_pct,
-            de.max_drawdown_pct,
+            de.event_max_drawdown_pct,
+            de.drawdown_velocity_pct_per_day,
             de.volatility_90d,
             de.prior_90d_return,
             de.volume_change_pct,
@@ -39,16 +57,17 @@ def load_training_data():
             de.relative_drop_pct,
             de.relative_prior_90d_return,
             de.sector_relative_drop_pct,
-            CASE 
-                WHEN de.days_to_recovery IS NOT NULL 
-                    AND de.days_to_recovery <= 180 
-                THEN 1 
-                ELSE 0 
-            END AS fast_recovery
+            de.sp500_volatility_90d,
+            de.sp500_return_20d,
+            de.sp500_return_90d,
+            de.sp500_distance_from_52w_high,
+            de.market_breadth_below_200d,
+            de.recovered_within_180d_after_prediction::int AS fast_recovery
         FROM drop_events de
         JOIN symbols s ON de.ticker = s.ticker
         WHERE de.ticker != '^GSPC'
             AND de.relative_prior_90d_return IS NOT NULL
+            AND de.recovered_within_180d_after_prediction IS NOT NULL
             AND de.drop_quarter >= (
                 SELECT MAX(drop_quarter) - INTERVAL '10 years'
                 FROM drop_events
@@ -63,14 +82,22 @@ def load_training_data():
 
 def prepare_features(df, medians=None):
     df = df.copy()
+    df = df.reindex(columns=df.columns.union(NUMERIC_COLS, sort=False))
+
+    # Treat non-finite derived values as missing before creating indicators.
+    df[NUMERIC_COLS] = df[NUMERIC_COLS].replace([float('inf'), float('-inf')], pd.NA)
 
     for col in NUMERIC_COLS:
         df[f"{col}_missing"] = df[col].isna().astype(int)
 
     if medians is None:
-        medians = df[NUMERIC_COLS].median()
+        medians = df[NUMERIC_COLS].median().fillna(0)
+    else:
+        # A newly introduced or entirely-null training feature has no usable
+        # median. Zero is a neutral fallback and its missing indicator remains 1.
+        medians = pd.Series(medians).reindex(NUMERIC_COLS).fillna(0)
 
-    df[NUMERIC_COLS] = df[NUMERIC_COLS].fillna(medians)
+    df[NUMERIC_COLS] = df[NUMERIC_COLS].fillna(medians).fillna(0)
     df['sector'] = df['sector'].fillna('Unknown')
     df = pd.get_dummies(df, columns=['sector'], drop_first=False)
     return df, medians
@@ -79,16 +106,60 @@ def prepare_features(df, medians=None):
 def time_based_split_raw(df):
     df = df.copy()
     df['drop_quarter'] = pd.to_datetime(df['drop_quarter'])
-    df = df.sort_values('drop_quarter')
+    df['prediction_date'] = pd.to_datetime(df['prediction_date'])
+    df['label_end_date'] = pd.to_datetime(df['label_end_date'])
+    df = df.sort_values('prediction_date')
 
-    train_cutoff = df['drop_quarter'].quantile(0.6)
-    val_cutoff = df['drop_quarter'].quantile(0.8)
+    val_start = df['prediction_date'].quantile(0.6)
+    test_start = df['prediction_date'].quantile(0.8)
 
-    train_df = df[df['drop_quarter'] < train_cutoff]
-    val_df = df[(df['drop_quarter'] >= train_cutoff) & (df['drop_quarter'] < val_cutoff)]
-    test_df = df[df['drop_quarter'] >= val_cutoff]
+    # Purge rows whose 180-day labels would not have been observable when the
+    # next evaluation period begins.
+    train_df = df[df['label_end_date'] < val_start]
+    val_df = df[
+        (df['prediction_date'] >= val_start) &
+        (df['label_end_date'] < test_start)
+    ]
+    test_df = df[df['prediction_date'] >= test_start]
 
     return train_df, val_df, test_df
+
+
+def final_holdout_split_raw(df, holdout_quantile=0.8):
+    """Freeze a final cohort and purge development labels crossing its start."""
+    df = df.copy()
+    df['prediction_date'] = pd.to_datetime(df['prediction_date'])
+    df['label_end_date'] = pd.to_datetime(df['label_end_date'])
+    holdout_start = df['prediction_date'].quantile(holdout_quantile)
+    development = df[df['label_end_date'] < holdout_start].copy()
+    holdout = df[df['prediction_date'] >= holdout_start].copy()
+    return development, holdout, holdout_start
+
+
+def purged_walk_forward_folds(df, n_splits=4):
+    """Expanding-window folds with label horizons purged before validation."""
+    df = df.copy()
+    df['prediction_date'] = pd.to_datetime(df['prediction_date'])
+    df['label_end_date'] = pd.to_datetime(df['label_end_date'])
+    dates = np.array(sorted(df['prediction_date'].dropna().unique()))
+    initial_dates = max(4, len(dates) // 3)
+    validation_dates = np.array_split(dates[initial_dates:], n_splits)
+    folds = []
+
+    for date_block in validation_dates:
+        if len(date_block) == 0:
+            continue
+        validation_start = pd.Timestamp(date_block[0])
+        validation_end = pd.Timestamp(date_block[-1])
+        train = df[df['label_end_date'] < validation_start].copy()
+        validation = df[
+            (df['prediction_date'] >= validation_start) &
+            (df['prediction_date'] <= validation_end)
+        ].copy()
+        if not train.empty and not validation.empty:
+            folds.append((train, validation))
+
+    return folds
 
 
 def train_random_forest(X_train, y_train, X_test):
@@ -116,10 +187,146 @@ def train_gradient_boosting(X_train, y_train, X_test):
     y_proba = model.predict_proba(X_test)[:, 1]
     return model, y_proba
 
-def train_logistic_model(X_train, y_train, X_test, c=0.1):
+
+def build_candidate_model(candidate):
+    if candidate['kind'] == 'elastic_net':
+        return Pipeline([
+            ('scaler', StandardScaler()),
+            ('clf', LogisticRegression(
+                solver='saga',
+                l1_ratio=candidate['l1_ratio'],
+                C=candidate['c'],
+                class_weight='balanced',
+                max_iter=3000,
+                random_state=42,
+            )),
+        ])
+    if candidate['kind'] == 'hist_gradient_boosting':
+        return HistGradientBoostingClassifier(
+            max_iter=250,
+            learning_rate=0.05,
+            max_leaf_nodes=candidate['max_leaf_nodes'],
+            l2_regularization=candidate['l2_regularization'],
+            random_state=42,
+        )
+    raise ValueError(f"Unknown candidate kind: {candidate['kind']}")
+
+
+def candidate_grid():
+    candidates = [
+        {'kind': 'elastic_net', 'c': c, 'l1_ratio': l1_ratio}
+        for c in (0.1, 0.5, 1.0)
+        for l1_ratio in (0.2, 0.5, 0.8)
+    ]
+    candidates.extend(
+        {
+            'kind': 'hist_gradient_boosting',
+            'max_leaf_nodes': leaves,
+            'l2_regularization': l2,
+        }
+        for leaves in (7, 15)
+        for l2 in (0.1, 1.0)
+    )
+    return candidates
+
+
+def evaluate_candidates_walk_forward(raw_df):
+    folds = purged_walk_forward_folds(raw_df)
+    results = []
+
+    for candidate in candidate_grid():
+        fold_pr_auc = []
+        fold_roc_auc = []
+        oof_y = []
+        oof_proba = []
+
+        for train_raw, validation_raw in folds:
+            train, medians = prepare_features(train_raw)
+            validation, _ = prepare_features(validation_raw, medians=medians)
+            validation = validation.reindex(columns=train.columns, fill_value=0)
+            feature_columns = [c for c in train.columns if c not in NON_FEATURE_COLS]
+            X_train, y_train = train[feature_columns], train['fast_recovery']
+            X_validation = validation[feature_columns]
+            y_validation = validation['fast_recovery']
+
+            model = build_candidate_model(candidate)
+            model.fit(X_train, y_train)
+            probability = model.predict_proba(X_validation)[:, 1]
+            fold_pr_auc.append(average_precision_score(y_validation, probability))
+            fold_roc_auc.append(roc_auc_score(y_validation, probability))
+            oof_y.extend(y_validation.tolist())
+            oof_proba.extend(probability.tolist())
+
+        results.append({
+            'candidate': candidate,
+            'mean_pr_auc': float(np.mean(fold_pr_auc)),
+            'mean_roc_auc': float(np.mean(fold_roc_auc)),
+            'oof_y': np.asarray(oof_y),
+            'oof_proba': np.asarray(oof_proba),
+            'folds': len(folds),
+        })
+
+    return max(results, key=lambda result: (result['mean_pr_auc'], result['mean_roc_auc']))
+
+
+def select_oof_threshold(y_true, probability):
+    best_threshold = 0.5
+    best_score = -1
+    for threshold in np.arange(0.25, 0.76, 0.01):
+        score = balanced_accuracy_score(y_true, probability >= threshold)
+        if score > best_score:
+            best_score = score
+            best_threshold = float(threshold)
+    return best_threshold, best_score
+
+
+def restore_incumbent_v3(raw_df, output_path='ml/recovery_model.pkl'):
+    """Rebuild the frozen pre-experiment incumbent without market features."""
+    train_raw, validation_raw, test_raw = time_based_split_raw(raw_df)
+    train, medians = prepare_features(train_raw)
+    validation, _ = prepare_features(validation_raw, medians=medians)
+    test, _ = prepare_features(test_raw, medians=medians)
+    validation = validation.reindex(columns=train.columns, fill_value=0)
+    test = test.reindex(columns=train.columns, fill_value=0)
+    excluded = MARKET_REGIME_COLS | {f'{column}_missing' for column in MARKET_REGIME_COLS}
+    feature_columns = [
+        column for column in train.columns
+        if column not in NON_FEATURE_COLS and column not in excluded
+    ]
+    X_train, y_train = train[feature_columns], train['fast_recovery']
+    X_test, y_test = test[feature_columns], test['fast_recovery']
+    model, probability = train_logistic_model(
+        X_train, y_train, X_test, c=0.5, class_weight='balanced'
+    )
+    prediction = probability >= 0.5
+    artifact = {
+        'model': model,
+        'feature_columns': feature_columns,
+        'medians': medians,
+        'threshold': 0.5,
+        'model_name': 'logistic_regression',
+        'model_version': 'v3',
+        'metrics': {
+            'test_auc': round(roc_auc_score(y_test, probability), 4),
+            'test_average_precision': round(average_precision_score(y_test, probability), 4),
+            'test_accuracy': round(accuracy_score(y_test, prediction), 4),
+            'test_f1': round(f1_score(y_test, prediction), 4),
+            'test_precision': round(precision_score(y_test, prediction), 4),
+            'test_recall': round(recall_score(y_test, prediction), 4),
+            'baseline_accuracy': round(accuracy_score(y_test, pd.Series(0, index=y_test.index)), 4),
+            'selected_c': 0.5,
+            'selected_class_weight': 'balanced',
+            'training_events': len(X_train),
+            'test_events': len(X_test),
+        },
+    }
+    joblib.dump(artifact, output_path)
+    return artifact
+
+def train_logistic_model(X_train, y_train, X_test, c=0.1, class_weight="balanced"):
     log_model = Pipeline([
         ("scaler", StandardScaler()),
-        ("clf", LogisticRegression(class_weight="balanced", max_iter=1000, C=c))
+        ("clf", LogisticRegression(class_weight=class_weight, max_iter=1000, C=c))
     ])
 
     log_model.fit(X_train, y_train)
@@ -163,6 +370,46 @@ def sweep_logistic_regularization(X_train, y_train, X_val, y_val, threshold=0.5)
 
     print(f"Best C: {best_c} (F1 = {best_f1:.3f})")
     return best_c
+
+
+def select_logistic_configuration(X_train, y_train, X_val, y_val):
+    """Choose regularization, weighting, and threshold using validation only."""
+    thresholds = [value / 100 for value in range(20, 81, 2)]
+    best = None
+
+    print("\nLogistic Regression validation selection (accuracy objective):")
+    for class_weight in ("balanced", None):
+        for c in (0.1, 0.5, 1.0, 2.0, 5.0):
+            _, val_proba = train_logistic_model(
+                X_train, y_train, X_val, c=c, class_weight=class_weight
+            )
+            val_auc = roc_auc_score(y_val, val_proba)
+
+            for threshold in thresholds:
+                val_pred = (val_proba >= threshold).astype(int)
+                candidate = {
+                    "c": c,
+                    "class_weight": class_weight,
+                    "threshold": threshold,
+                    "accuracy": accuracy_score(y_val, val_pred),
+                    "f1": f1_score(y_val, val_pred),
+                    "roc_auc": val_auc,
+                }
+                score = (candidate["accuracy"], candidate["f1"], candidate["roc_auc"])
+                if best is None or score > best["score"]:
+                    best = {**candidate, "score": score}
+
+        weight_label = class_weight if class_weight is not None else "none"
+        print(f"  evaluated class_weight={weight_label}")
+
+    print(
+        "Selected: "
+        f"C={best['c']}, class_weight={best['class_weight']}, "
+        f"threshold={best['threshold']:.2f}, "
+        f"val_accuracy={best['accuracy']:.3f}, val_f1={best['f1']:.3f}, "
+        f"val_roc_auc={best['roc_auc']:.3f}"
+    )
+    return best
 
 
 
@@ -224,74 +471,72 @@ def evaluate_majority_baseline(y_test):
 if __name__ == "__main__":
     raw_df = load_training_data()
     print(f"Loaded {len(raw_df)} events")
+    development_raw, holdout_raw, holdout_start = final_holdout_split_raw(raw_df)
+    print(f"Frozen holdout begins: {holdout_start.date()}")
+    print(f"Development: {len(development_raw)} events")
+    print(f"Final holdout: {len(holdout_raw)} events")
 
-    train_df, val_df, test_df = time_based_split_raw(raw_df)
-
-    train_df, medians = prepare_features(train_df)
-    val_df, _ = prepare_features(val_df, medians=medians)
-    test_df, _ = prepare_features(test_df, medians=medians)
-
-    val_df = val_df.reindex(columns=train_df.columns, fill_value=0)
-    test_df = test_df.reindex(columns=train_df.columns, fill_value=0)
-
-    feature_cols = [
-        c for c in train_df.columns
-        if c not in ('ticker', 'drop_quarter', 'fast_recovery')
-    ]
-
-    X_train, y_train = train_df[feature_cols], train_df['fast_recovery']
-    X_val, y_val = val_df[feature_cols], val_df['fast_recovery']
-    X_test, y_test = test_df[feature_cols], test_df['fast_recovery']
-
-    print(f"Train: {len(X_train)} events")
-    print(f"Val:   {len(X_val)} events")
-    print(f"Test:  {len(X_test)} events")
-
-    evaluate_majority_baseline(y_test)
-    # Random Forest: report at default threshold 0.5, no threshold tuning as headline
-    rf_model, rf_test_proba = train_random_forest(X_train, y_train, X_test)
-    evaluate_model("Random Forest", y_test, rf_test_proba, threshold=0.5)
-
-    # Logistic Regression: tune C on validation only, report at default threshold 0.5
-    best_c = sweep_logistic_regularization(X_train, y_train, X_val, y_val)
-    log_model, log_test_proba = train_logistic_model(X_train, y_train, X_test, c=best_c)
-    evaluate_model("Logistic Regression", y_test, log_test_proba, threshold=0.5)
-    test_auc = roc_auc_score(y_test, log_test_proba)
-    test_accuracy = accuracy_score(y_test, (log_test_proba >= 0.5).astype(int))
-    baseline_accuracy = accuracy_score(y_test, pd.Series(0, index=y_test.index))
-    top_coefficients = (
-        pd.Series(log_model.named_steps['clf'].coef_[0], index=X_train.columns)
-        .sort_values(key=abs, ascending=False)
-        .head(5)
-        .to_dict()
+    selected = evaluate_candidates_walk_forward(development_raw)
+    selected_threshold, oof_balanced_accuracy = select_oof_threshold(
+        selected['oof_y'], selected['oof_proba']
+    )
+    print(
+        f"Selected by {selected['folds']}-fold mean PR AUC: {selected['candidate']}\n"
+        f"Walk-forward PR AUC={selected['mean_pr_auc']:.3f}, "
+        f"ROC AUC={selected['mean_roc_auc']:.3f}, "
+        f"OOF threshold={selected_threshold:.2f}, "
+        f"balanced accuracy={oof_balanced_accuracy:.3f}"
     )
 
+    development, medians = prepare_features(development_raw)
+    holdout, _ = prepare_features(holdout_raw, medians=medians)
+    holdout = holdout.reindex(columns=development.columns, fill_value=0)
+    feature_columns = [c for c in development.columns if c not in NON_FEATURE_COLS]
+    X_development = development[feature_columns]
+    y_development = development['fast_recovery']
+    X_holdout = holdout[feature_columns]
+    y_holdout = holdout['fast_recovery']
+
+    model = build_candidate_model(selected['candidate'])
+    model.fit(X_development, y_development)
+    holdout_probability = model.predict_proba(X_holdout)[:, 1]
+    holdout_prediction = (holdout_probability >= selected_threshold).astype(int)
+
+    evaluate_majority_baseline(y_holdout)
+    evaluate_model(
+        f"Final {selected['candidate']['kind']}",
+        y_holdout,
+        holdout_probability,
+        selected_threshold,
+    )
+
+    metrics = {
+        'test_auc': round(roc_auc_score(y_holdout, holdout_probability), 4),
+        'test_average_precision': round(average_precision_score(y_holdout, holdout_probability), 4),
+        'test_accuracy': round(accuracy_score(y_holdout, holdout_prediction), 4),
+        'test_balanced_accuracy': round(balanced_accuracy_score(y_holdout, holdout_prediction), 4),
+        'test_f1': round(f1_score(y_holdout, holdout_prediction), 4),
+        'test_precision': round(precision_score(y_holdout, holdout_prediction, zero_division=0), 4),
+        'test_recall': round(recall_score(y_holdout, holdout_prediction, zero_division=0), 4),
+        'baseline_accuracy': round(accuracy_score(y_holdout, pd.Series(0, index=y_holdout.index)), 4),
+        'walk_forward_pr_auc': round(selected['mean_pr_auc'], 4),
+        'walk_forward_roc_auc': round(selected['mean_roc_auc'], 4),
+        'walk_forward_folds': selected['folds'],
+        'selected_candidate': selected['candidate'],
+        'training_events': len(X_development),
+        'test_events': len(X_holdout),
+        'holdout_start': str(holdout_start.date()),
+    }
+
     joblib.dump({
-        "model": log_model,
-        "feature_columns": X_train.columns.tolist(),
-        "medians": medians,
-        "threshold": 0.5,
-        "model_name": "logistic_regression",
-        "model_version": "v1",
-        "metrics": {
-            "test_auc": round(test_auc, 4),
-            "test_accuracy": round(test_accuracy, 4),
-            "baseline_accuracy": round(baseline_accuracy, 4),
-            "top_coefficients": {k: round(v, 4) for k, v in top_coefficients.items()},
-            "training_events": len(X_train),
-            "test_events": len(X_test),
-        },
-    }, "ml/recovery_model.pkl")
+        'model': model,
+        'feature_columns': feature_columns,
+        'medians': medians,
+        'threshold': selected_threshold,
+        'model_name': selected['candidate']['kind'],
+        'model_version': 'v4',
+        'metrics': metrics,
+    }, 'ml/recovery_model_v4_experiment.pkl')
 
-    # Gradient Boosting: same, default threshold
-    gb_model, gb_test_proba = train_gradient_boosting(X_train, y_train, X_test)
-    evaluate_model("Gradient Boosting", y_test, gb_test_proba, threshold=0.5)
-
-    show_feature_importance(rf_model, X_train)
-    show_logistic_coefficients(log_model, X_train)
-
-    print("\nRandom Forest probability buckets:")
-    show_probability_buckets(y_test, rf_test_proba)
-
-    print("\nLogistic Regression probability buckets:")
-    show_probability_buckets(y_test, log_test_proba)
+    print("\nFinal holdout probability buckets:")
+    show_probability_buckets(y_holdout, holdout_probability)

@@ -38,14 +38,42 @@ CREATE TABLE IF NOT EXISTS public.drop_events (
     recovered_date date,
     days_to_recovery integer,
     recovered_within_1yr boolean,
-    max_drawdown_pct numeric(12,4),
+    prediction_date date,
+    label_end_date date,
+    days_to_recovery_after_prediction integer,
+    recovered_within_180d_after_prediction boolean,
+    model_exclusion_reason character varying(40),
+    event_max_drawdown_pct numeric(12,4),
+    recovery_path_low_date date,
+    recovery_path_low_price numeric(12,4),
+    recovery_path_max_drawdown_pct numeric(12,4),
     trough_date date,
     prior_90d_return numeric(8,4),
     volume_change_pct numeric(8,4),
     distance_from_52w_high numeric(8,4),
     relative_drop_pct numeric(8,4),
     relative_prior_90d_return numeric(8,4),
-    sector_relative_drop_pct numeric(8,4)
+    sector_relative_drop_pct numeric(8,4),
+    drawdown_velocity_pct_per_day numeric(12,8),
+    severity_x_volatility numeric(12,8),
+    relative_drop_x_velocity numeric(12,8),
+    prior_return_x_relative_drop numeric(12,8),
+    sp500_volatility_90d numeric(12,8),
+    sp500_return_20d numeric(12,8),
+    sp500_return_90d numeric(12,8),
+    sp500_distance_from_52w_high numeric(12,8),
+    market_breadth_below_200d numeric(12,8),
+    days_underwater_as_of_prediction integer,
+    pct_days_underwater_in_event_window numeric(12,8),
+    number_of_new_lows_in_event_window integer,
+    bounce_from_event_low_pct numeric(12,8),
+    last_20d_return_before_prediction numeric(12,8),
+    last_10d_return_before_prediction numeric(12,8),
+    slope_20d_before_prediction numeric(12,8),
+    ticker_prior_fast_recovery_rate numeric(12,8),
+    ticker_prior_median_days_to_recovery numeric(12,4),
+    ticker_prior_event_count integer,
+    ticker_prior_avg_drawdown numeric(12,8)
 );
 
 
@@ -438,4 +466,3 @@ ALTER TABLE ONLY public.stock_prices
 --
 
 \unrestrict zvwd1VHz7aP7NjQBKgoQ32EcskRyx720m9PAhZipartw2JHF37PJKzOIyZd3CFm
-

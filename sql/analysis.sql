@@ -68,7 +68,7 @@ SELECT
     recovery_speed,
     COUNT(*) AS total_drops,
     ROUND(AVG(drop_pct) * 100, 1) AS avg_drop_pct,
-    ROUND(AVG(max_drawdown_pct) * 100, 1) AS avg_max_drawdown_pct,
+    ROUND(AVG(event_max_drawdown_pct) * 100, 1) AS avg_event_max_drawdown_pct,
     MODE() WITHIN GROUP (ORDER BY sector) AS most_common_sector
 FROM labeled
 GROUP BY recovery_speed;

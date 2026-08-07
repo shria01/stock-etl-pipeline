@@ -81,10 +81,14 @@ def read_me(current_user: User = Depends(get_current_user)):
 @app.post("/api/predict", response_model=PredictionResponse)
 def predict(request: PredictionRequest, db: Session = Depends(get_db), current_user: User | None = Depends(get_current_user_optional)):
     query = text("""
-        SELECT de.id, de.ticker, s.sector, de.drop_pct, de.max_drawdown_pct,
+        SELECT de.id, de.ticker, s.sector, de.drop_pct, de.event_max_drawdown_pct,
+               de.drawdown_velocity_pct_per_day,
                de.volatility_90d, de.prior_90d_return, de.volume_change_pct,
                de.distance_from_52w_high, de.relative_drop_pct,
-               de.relative_prior_90d_return, de.sector_relative_drop_pct
+               de.relative_prior_90d_return, de.sector_relative_drop_pct,
+               de.sp500_volatility_90d, de.sp500_return_20d,
+               de.sp500_return_90d, de.sp500_distance_from_52w_high,
+               de.market_breadth_below_200d
         FROM drop_events de
         JOIN symbols s ON de.ticker = s.ticker
         WHERE de.id = :event_id
@@ -105,7 +109,7 @@ def predict(request: PredictionRequest, db: Session = Depends(get_db), current_u
             sector=feature_dict.get("sector"),
             drop_pct=feature_dict.get("drop_pct"),
             predicted_probability=prediction["probability"],
-            model_version="v1",
+            model_version=prediction.get("model_version", "unknown"),
         )
     else:
         new_prediction = Prediction(
@@ -115,7 +119,7 @@ def predict(request: PredictionRequest, db: Session = Depends(get_db), current_u
             sector=feature_dict.get("sector"),
             drop_pct=feature_dict.get("drop_pct"),
             predicted_probability=prediction["probability"],
-            model_version="v1",
+            model_version=prediction.get("model_version", "unknown"),
         )
 
     db.add(new_prediction)
@@ -126,7 +130,8 @@ def predict(request: PredictionRequest, db: Session = Depends(get_db), current_u
         "ticker": ticker,
         "sector": feature_dict.get("sector"),
         "relative_drop_pct": feature_dict.get("relative_drop_pct"),
-        "max_drawdown_pct": feature_dict.get("max_drawdown_pct"),
+        "event_max_drawdown_pct": feature_dict.get("event_max_drawdown_pct"),
+        "drawdown_velocity_pct_per_day": feature_dict.get("drawdown_velocity_pct_per_day"),
         "distance_from_52w_high": feature_dict.get("distance_from_52w_high"),
         "volatility_90d": feature_dict.get("volatility_90d"),
         "sector_relative_drop_pct": feature_dict.get("sector_relative_drop_pct"),
@@ -152,7 +157,7 @@ def get_my_predictions(
 
             de.ticker,
             de.drop_quarter,
-            de.days_to_recovery,
+            de.days_to_recovery_after_prediction AS days_to_recovery,
             de.recovered_within_1yr
         FROM predictions p
         LEFT JOIN drop_events de
@@ -182,9 +187,13 @@ def get_sectors(db: Session = Depends(get_db)):
 def get_drawdowns(ticker: str, db: Session = Depends(get_db)):
     query = text("""
         SELECT de.id, de.ticker, de.drop_quarter, de.drop_pct,
-               de.max_drawdown_pct, de.days_to_recovery, de.recovered_within_1yr
+               de.event_max_drawdown_pct, de.prediction_date,
+               de.days_to_recovery_after_prediction AS days_to_recovery,
+               de.recovered_within_180d_after_prediction,
+               de.model_exclusion_reason
         FROM drop_events de
         WHERE de.ticker = :ticker
+          AND de.recovered_within_180d_after_prediction IS NOT NULL
         ORDER BY de.drop_quarter DESC
     """)
     result = db.execute(query, {"ticker": ticker}).mappings().all()
@@ -194,7 +203,10 @@ def get_drawdowns(ticker: str, db: Session = Depends(get_db)):
 def get_drawdowns_by_id(event_id: int, db: Session = Depends(get_db)):
     query = text("""
         SELECT de.id, de.ticker, de.drop_quarter, de.drop_pct,
-               de.max_drawdown_pct, de.days_to_recovery, de.recovered_within_1yr
+               de.event_max_drawdown_pct, de.prediction_date,
+               de.days_to_recovery_after_prediction AS days_to_recovery,
+               de.recovered_within_180d_after_prediction,
+               de.model_exclusion_reason
         FROM drop_events de
         WHERE de.id = :event_id
     """)
@@ -239,6 +251,9 @@ def get_drawdown_prices(event_id: int, db: Session = Depends(get_db)):
             de.trough_price,
             de.recovered_date,
             de.days_to_recovery,
+            de.recovery_path_low_date,
+            de.recovery_path_low_price,
+            de.recovery_path_max_drawdown_pct,
             (
                 SELECT MIN(sp.price_date)
                 FROM stock_prices sp
@@ -277,6 +292,9 @@ def get_drawdown_prices(event_id: int, db: Session = Depends(get_db)):
         "trough_price": event.trough_price,
         "recovered_date": event.recovered_date,
         "days_to_recovery": event.days_to_recovery,
+        "recovery_path_low_date": event.recovery_path_low_date,
+        "recovery_path_low_price": event.recovery_path_low_price,
+        "recovery_path_max_drawdown_pct": event.recovery_path_max_drawdown_pct,
         "prices": prices,
     }
 
