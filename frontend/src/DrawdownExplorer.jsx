@@ -686,6 +686,69 @@ function AnalysisSummary({
 }
 
 
+function SurvivalRecoveryTimeline({ prediction }) {
+  const curve = prediction?.survival_curve;
+  if (!curve?.length) return null;
+
+  return (
+    <Card className={`${card} gap-0 overflow-hidden py-0`}>
+      <CardHeader className="border-b border-[#DDE7F0] px-5 py-5">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <p className={label}>Recovery probability over time</p>
+            <p className="mt-1 max-w-xl text-xs leading-5 text-[#64748B]">
+              Cumulative probability of returning to baseline, conditional on the stock remaining unrecovered at each interval.
+            </p>
+          </div>
+          <Badge className={badgeNeutral}>Research · {prediction.survival_model_version}</Badge>
+        </div>
+      </CardHeader>
+
+      <CardContent className="p-5">
+        <div className="space-y-4">
+          {curve.map((point, index) => {
+            const cumulative = point.cumulative_recovery_probability * 100;
+            const conditional = point.conditional_recovery_probability * 100;
+            return (
+              <div key={point.horizon_days}>
+                <div className="mb-1.5 flex items-end justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-semibold text-[#0B1220]">By {point.horizon_days} days</p>
+                    <p className="text-[11px] text-[#94A3B8]">
+                      {conditional.toFixed(1)}% conditional chance during days{' '}
+                      {index === 0 ? 1 : curve[index - 1].horizon_days + 1}–{point.horizon_days}
+                    </p>
+                  </div>
+                  <span className="font-mono text-sm font-semibold text-[#12355B]">
+                    {cumulative.toFixed(1)}%
+                  </span>
+                </div>
+                <div className="relative h-2.5 overflow-hidden rounded-full bg-[#EEF2F6]">
+                  <div
+                    className="h-full rounded-full bg-[linear-gradient(90deg,#0B4F7A,#38A3A5)] transition-[width] duration-500"
+                    style={{ width: `${Math.max(2, Math.min(100, cumulative))}%` }}
+                  />
+                  {index > 0 && (
+                    <span
+                      className="absolute inset-y-0 w-px bg-white/90"
+                      style={{ left: `${curve[index - 1].cumulative_recovery_probability * 100}%` }}
+                    />
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="mt-5 rounded-2xl border border-[#DDE7F0] bg-[#F8FBFF] px-4 py-3 text-xs leading-5 text-[#52637A]">
+          This experimental survival curve uses censored historical events. Model v3 remains the production 180-day classification signal.
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+
 function FeatureIcon({ icon: Icon, tone = 'neutral' }) {
   const tones = {
     neutral: 'bg-[#EEF2F6] text-[#475569]',
@@ -1299,6 +1362,8 @@ function DrawdownExplorer({ token, onSignIn, initialEventId, clearInitialEvent }
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
             <div className="space-y-5">
               <RecoveryPathChart priceHistory={priceHistory} />
+
+              <SurvivalRecoveryTimeline prediction={prediction} />
 
               <BenchmarkChart
                 prediction={prediction}

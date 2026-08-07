@@ -27,6 +27,11 @@ class PredictionRequest(BaseModel):
     drop_event_id: int
     session_id: str | None = None
 
+class SurvivalPoint(BaseModel):
+    horizon_days: int
+    conditional_recovery_probability: float
+    cumulative_recovery_probability: float
+
 class PredictionResponse(BaseModel):
     probability: float
     threshold: float
@@ -42,6 +47,8 @@ class PredictionResponse(BaseModel):
     volatility_90d: float | None
     sector_relative_drop_pct: float | None
     prior_90d_return: float | None 
+    survival_model_version: str
+    survival_curve: list[SurvivalPoint]
 
 class PredictionHistoryItem(BaseModel):
     id: int
@@ -54,4 +61,3 @@ class PredictionHistoryItem(BaseModel):
 
     class Config:
             from_attributes = True
-

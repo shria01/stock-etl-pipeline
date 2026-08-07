@@ -1,6 +1,7 @@
 """Discrete-time recovery survival experiment with right-censored events."""
 
 import json
+from functools import lru_cache
 
 import joblib
 import numpy as np
@@ -172,8 +173,13 @@ def cumulative_recovery_predictions(scoring_rows, hazard_probability):
     return scored
 
 
+@lru_cache(maxsize=1)
+def get_survival_model_data(artifact_path='ml/recovery_survival_model.pkl'):
+    return joblib.load(artifact_path)
+
+
 def predict_survival(feature_dict, artifact_path='ml/recovery_survival_model.pkl'):
-    artifact = joblib.load(artifact_path)
+    artifact = get_survival_model_data(artifact_path)
     rows = []
     for bucket_index, (start_day, end_day) in enumerate(artifact['buckets']):
         rows.append({

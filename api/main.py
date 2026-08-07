@@ -8,6 +8,7 @@ from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy import text
 from ml.predict_recovery import predict_recovery, get_model_data
+from ml.survival_model import get_survival_model_data, predict_survival
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
@@ -88,7 +89,11 @@ def predict(request: PredictionRequest, db: Session = Depends(get_db), current_u
                de.relative_prior_90d_return, de.sector_relative_drop_pct,
                de.sp500_volatility_90d, de.sp500_return_20d,
                de.sp500_return_90d, de.sp500_distance_from_52w_high,
-               de.market_breadth_below_200d
+               de.market_breadth_below_200d,
+               de.ticker_prior_fast_recovery_rate,
+               de.ticker_prior_median_days_to_recovery,
+               de.ticker_prior_event_count,
+               de.ticker_prior_avg_drawdown
         FROM drop_events de
         JOIN symbols s ON de.ticker = s.ticker
         WHERE de.id = :event_id
@@ -101,6 +106,8 @@ def predict(request: PredictionRequest, db: Session = Depends(get_db), current_u
     feature_dict = dict(result)
     ticker = feature_dict.pop("ticker")
     prediction = predict_recovery(feature_dict)
+    survival_curve = predict_survival(feature_dict)
+    survival_model_version = get_survival_model_data().get("model_version", "unknown")
     if current_user is not None:
         new_prediction = Prediction(
             user_id=current_user.id,
@@ -135,7 +142,9 @@ def predict(request: PredictionRequest, db: Session = Depends(get_db), current_u
         "distance_from_52w_high": feature_dict.get("distance_from_52w_high"),
         "volatility_90d": feature_dict.get("volatility_90d"),
         "sector_relative_drop_pct": feature_dict.get("sector_relative_drop_pct"),
-        "prior_90d_return": feature_dict.get("prior_90d_return")
+        "prior_90d_return": feature_dict.get("prior_90d_return"),
+        "survival_model_version": survival_model_version,
+        "survival_curve": survival_curve,
     }
 
 @app.get("/api/predictions/me")
