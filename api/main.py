@@ -211,11 +211,7 @@ def get_drawdowns(ticker: str, db: Session = Depends(get_db)):
 @app.get("/api/drawdowns/{event_id}")
 def get_drawdowns_by_id(event_id: int, db: Session = Depends(get_db)):
     query = text("""
-        SELECT de.id, de.ticker, de.drop_quarter, de.drop_pct,
-               de.event_max_drawdown_pct, de.prediction_date,
-               de.days_to_recovery_after_prediction AS days_to_recovery,
-               de.recovered_within_180d_after_prediction,
-               de.model_exclusion_reason
+        SELECT de.id, de.ticker, de.drop_quarter, de.drop_pct
         FROM drop_events de
         WHERE de.id = :event_id
     """)
@@ -260,9 +256,6 @@ def get_drawdown_prices(event_id: int, db: Session = Depends(get_db)):
             de.trough_price,
             de.recovered_date,
             de.days_to_recovery,
-            de.recovery_path_low_date,
-            de.recovery_path_low_price,
-            de.recovery_path_max_drawdown_pct,
             (
                 SELECT MIN(sp.price_date)
                 FROM stock_prices sp
@@ -301,9 +294,6 @@ def get_drawdown_prices(event_id: int, db: Session = Depends(get_db)):
         "trough_price": event.trough_price,
         "recovered_date": event.recovered_date,
         "days_to_recovery": event.days_to_recovery,
-        "recovery_path_low_date": event.recovery_path_low_date,
-        "recovery_path_low_price": event.recovery_path_low_price,
-        "recovery_path_max_drawdown_pct": event.recovery_path_max_drawdown_pct,
         "prices": prices,
     }
 
