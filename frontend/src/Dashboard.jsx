@@ -251,6 +251,7 @@ function Dashboard({ token, onSignIn, onRegister, onGoToPredict }) {
   const [history, setHistory] = useState([]);
   const [modelInfo, setModelInfo] = useState(null);
   const [suggested, setSuggested] = useState([]);
+  const [historyError, setHistoryError] = useState(null);
   const [suggestedEventIds] = useState(() => getRandomEventIds(CURATED_EVENT_IDS));
   const [loading, setLoading] = useState(true);
   const [dashboardStats, setDashboardStats] = useState({
@@ -266,56 +267,86 @@ function Dashboard({ token, onSignIn, onRegister, onGoToPredict }) {
       try {
         setLoading(true);
 
-        const [modelResponse, suggestedResults, priceResults] = await Promise.all([
-          fetch(`${API_URL}/api/model-info`),
-          Promise.all(
-            suggestedEventIds.map(id =>
-              fetch(`${API_URL}/api/drawdowns/${id}`).then(r => r.json())
-            )
-          ),
-          Promise.all(
-            suggestedEventIds.map(id =>
-              fetch(`${API_URL}/api/drawdowns/${id}/prices`).then(r => r.json())
-            )
-          ),
-        ]);
+        // Keep the independent dashboard sections isolated: a stale or missing
+        // curated event must not hide otherwise valid model metrics.
+        const modelRequest = fetch(`${API_URL}/api/model-info`)
+          .then(response => {
+            if (!response.ok) throw new Error(`Model info request failed: ${response.status}`);
+            return response.json();
+          })
+          .then(data => {
+            if (!cancelled) setModelInfo(data);
+          })
+          .catch(error => console.error('Unable to load model info', error));
 
-        if (cancelled) return;
+        const suggestedRequest = Promise.allSettled(
+          suggestedEventIds.map(async id => {
+            const [eventResponse, pricesResponse] = await Promise.all([
+              fetch(`${API_URL}/api/drawdowns/${id}`),
+              fetch(`${API_URL}/api/drawdowns/${id}/prices`),
+            ]);
 
-        const modelData = await modelResponse.json();
-        setModelInfo(modelData);
-        setSuggested(
-          suggestedResults.map((event, i) => ({ ...event, prices: priceResults[i].prices }))
-        );
+            if (!eventResponse.ok || !pricesResponse.ok) {
+              throw new Error(`Unable to load drawdown ${id}`);
+            }
+
+            const [event, priceData] = await Promise.all([
+              eventResponse.json(),
+              pricesResponse.json(),
+            ]);
+            return { ...event, prices: priceData.prices ?? [] };
+          })
+        ).then(results => {
+          if (!cancelled) {
+            setSuggested(
+              results
+                .filter(result => result.status === 'fulfilled')
+                .map(result => result.value)
+            );
+          }
+        });
+
+        await Promise.all([modelRequest, suggestedRequest]);
 
         if (token) {
-          const historyRes = await fetch(`${API_URL}/api/predictions/me`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
+          try {
+            setHistoryError(null);
+            const historyRes = await fetch(`${API_URL}/api/predictions/me`, {
+              headers: { Authorization: `Bearer ${token}` },
+            });
 
-          const rawHistory = await historyRes.json();
+            if (!historyRes.ok) {
+              throw new Error(`Prediction history request failed: ${historyRes.status}`);
+            }
 
-          if (cancelled) return;
+            const rawHistory = await historyRes.json();
+            if (!Array.isArray(rawHistory)) {
+              throw new Error('Prediction history response was not a list');
+            }
 
-          setDashboardStats({
-            predictionsCount: rawHistory.length,
-            tickersExploredCount: new Set(
-              rawHistory.map(pred => pred.ticker).filter(Boolean)
-            ).size,
-            highLikelihoodCount: rawHistory.filter(
-              pred => pred.predicted_probability >= 0.6
-            ).length,
-          });
+            if (cancelled) return;
 
-          const recentOnly = rawHistory.slice(0, 5).map(pred => ({
-            ...pred,
-            actualOutcome:
-              pred.days_to_recovery == null
-                ? null
-                : pred.days_to_recovery <= 180,
-          }));
+            setDashboardStats({
+              predictionsCount: rawHistory.length,
+              tickersExploredCount: new Set(
+                rawHistory.map(pred => pred.ticker).filter(Boolean)
+              ).size,
+              highLikelihoodCount: rawHistory.filter(
+                pred => pred.predicted_probability >= 0.6
+              ).length,
+            });
 
-          setHistory(recentOnly);
+            setHistory(rawHistory.slice(0, 5).map(pred => ({
+              ...pred,
+              actualOutcome:
+                pred.days_to_recovery == null
+                  ? null
+                  : pred.days_to_recovery <= 180,
+            })));
+          } catch (error) {
+            console.error('Unable to load dashboard history', error);
+            if (!cancelled) setHistoryError('Prediction history could not be loaded.');
+          }
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -331,9 +362,6 @@ function Dashboard({ token, onSignIn, onRegister, onGoToPredict }) {
 
   const { predictionsCount, tickersExploredCount, highLikelihoodCount } = dashboardStats;
   const lastPrediction = history.length > 0 ? history[0] : null;
-  const savedProbabilities = history
-    .map(pred => pred.predicted_probability)
-    .filter(value => typeof value === 'number');
   const modelVersion = modelInfo?.model_version ?? modelInfo?.version ?? 'Model v1';
 
   if (loading) {
@@ -490,10 +518,15 @@ function Dashboard({ token, onSignIn, onRegister, onGoToPredict }) {
                   </div>
 
                   <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button className="mt-2 cursor-help text-left text-sm font-medium text-[#52637A] underline decoration-[#BFD2E3] decoration-dotted underline-offset-4 hover:text-[#12355B]">
-                        {name}
-                      </button>
+                    <TooltipTrigger
+                      render={
+                        <button
+                          type="button"
+                          className="mt-2 cursor-help text-left text-sm font-medium text-[#52637A] underline decoration-[#BFD2E3] decoration-dotted underline-offset-4 hover:text-[#12355B]"
+                        />
+                      }
+                    >
+                      {name}
                     </TooltipTrigger>
                     <TooltipContent
                       side="bottom"
@@ -586,6 +619,12 @@ function Dashboard({ token, onSignIn, onRegister, onGoToPredict }) {
           + New prediction
         </Button>
       </section>
+
+      {historyError && (
+        <div className="mb-6 rounded-xl border border-[#FECACA] bg-[#FEF2F2] px-4 py-3 text-sm text-[#B91C1C]">
+          {historyError} Refresh the page to try again.
+        </div>
+      )}
 
       <section className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3">
         <StatCard icon={<TrendingUp className="h-5 w-5" />} value={predictionsCount} label="Predictions made" />

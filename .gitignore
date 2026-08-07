@@ -7,3 +7,4 @@ api/.env
 frontend/.env
 *.pkl
 !ml/recovery_model.pkl
+!ml/recovery_survival_model.pkl

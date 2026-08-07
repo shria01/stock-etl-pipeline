@@ -83,6 +83,19 @@ def read_me(current_user: User = Depends(get_current_user)):
 def predict(request: PredictionRequest, db: Session = Depends(get_db), current_user: User | None = Depends(get_current_user_optional)):
     query = text("""
         SELECT de.id, de.ticker, s.sector, de.drop_pct,
+               COALESCE(
+                   (to_jsonb(de) ->> 'event_max_drawdown_pct')::numeric,
+                   (to_jsonb(de) ->> 'max_drawdown_pct')::numeric,
+                   de.drop_pct
+               ) AS event_max_drawdown_pct,
+               COALESCE(
+                   (to_jsonb(de) ->> 'drawdown_velocity_pct_per_day')::numeric,
+                   COALESCE(
+                       (to_jsonb(de) ->> 'event_max_drawdown_pct')::numeric,
+                       (to_jsonb(de) ->> 'max_drawdown_pct')::numeric,
+                       de.drop_pct
+                   ) / NULLIF((to_jsonb(de) ->> 'trough_date')::date - de.drop_quarter, 0)
+               ) AS drawdown_velocity_pct_per_day,
                de.volatility_90d, de.prior_90d_return, de.volume_change_pct,
                de.distance_from_52w_high, de.relative_drop_pct,
                de.relative_prior_90d_return, de.sector_relative_drop_pct
@@ -194,7 +207,20 @@ def get_sectors(db: Session = Depends(get_db)):
 def get_drawdowns(ticker: str, db: Session = Depends(get_db)):
     query = text("""
         SELECT de.id, de.ticker, de.drop_quarter, de.drop_pct,
-               de.days_to_recovery, de.recovered_within_1yr
+               de.days_to_recovery, de.recovered_within_1yr,
+               COALESCE(
+                   (to_jsonb(de) ->> 'event_max_drawdown_pct')::numeric,
+                   (to_jsonb(de) ->> 'max_drawdown_pct')::numeric,
+                   de.drop_pct
+               ) AS event_max_drawdown_pct,
+               COALESCE(
+                   (to_jsonb(de) ->> 'drawdown_velocity_pct_per_day')::numeric,
+                   COALESCE(
+                       (to_jsonb(de) ->> 'event_max_drawdown_pct')::numeric,
+                       (to_jsonb(de) ->> 'max_drawdown_pct')::numeric,
+                       de.drop_pct
+                   ) / NULLIF((to_jsonb(de) ->> 'trough_date')::date - de.drop_quarter, 0)
+               ) AS drawdown_velocity_pct_per_day
         FROM drop_events de
         WHERE de.ticker = :ticker
         ORDER BY de.drop_quarter DESC
@@ -206,7 +232,20 @@ def get_drawdowns(ticker: str, db: Session = Depends(get_db)):
 def get_drawdowns_by_id(event_id: int, db: Session = Depends(get_db)):
     query = text("""
         SELECT de.id, de.ticker, de.drop_quarter, de.drop_pct,
-               de.days_to_recovery, de.recovered_within_1yr
+               de.days_to_recovery, de.recovered_within_1yr,
+               COALESCE(
+                   (to_jsonb(de) ->> 'event_max_drawdown_pct')::numeric,
+                   (to_jsonb(de) ->> 'max_drawdown_pct')::numeric,
+                   de.drop_pct
+               ) AS event_max_drawdown_pct,
+               COALESCE(
+                   (to_jsonb(de) ->> 'drawdown_velocity_pct_per_day')::numeric,
+                   COALESCE(
+                       (to_jsonb(de) ->> 'event_max_drawdown_pct')::numeric,
+                       (to_jsonb(de) ->> 'max_drawdown_pct')::numeric,
+                       de.drop_pct
+                   ) / NULLIF((to_jsonb(de) ->> 'trough_date')::date - de.drop_quarter, 0)
+               ) AS drawdown_velocity_pct_per_day
         FROM drop_events de
         WHERE de.id = :event_id
     """)

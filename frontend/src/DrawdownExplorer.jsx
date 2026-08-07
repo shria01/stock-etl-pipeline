@@ -25,10 +25,10 @@ import {
 } from 'lucide-react';
 
 const API_URL = import.meta.env.VITE_API_URL;
+const priceHistoryCache = new Map();
 
 const card = 'rounded-2xl border-[#DDE7F0] bg-white shadow-[0_10px_30px_rgba(18,53,91,0.06)]';
 const label = 'text-[11px] font-semibold uppercase tracking-[0.16em] text-[#64748B]';
-const muted = 'text-sm leading-6 text-[#64748B]';
 const buttonPrimary =
   'h-10 cursor-pointer rounded-xl bg-[#12355B] px-4 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[#082F49] disabled:cursor-not-allowed disabled:opacity-50';
 const badgeSuccess =
@@ -47,24 +47,8 @@ function getOrCreateSessionId() {
   return sessionId;
 }
 
-function getRecoveryBadge(daysToRecovery, recoveredWithin1yr) {
-  if (daysToRecovery === null) {
-    return { label: 'Pending', className: badgeNeutral };
-  }
-  if (daysToRecovery <= 180) {
-    return { label: `Recovered fast · ${daysToRecovery}d`, className: badgeSuccess };
-  }
-  if (recoveredWithin1yr) {
-    return {
-      label: `Recovered · ${daysToRecovery}d`,
-      className: 'rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700 hover:bg-amber-50',
-    };
-  }
-  return { label: `Recovered slowly · ${daysToRecovery}d`, className: badgeDanger };
-}
-
 function describeOutcome(daysToRecovery) {
-  if (daysToRecovery === null) {
+  if (daysToRecovery == null) {
     return {
       label: 'Not recovered',
       detail: 'This stock has not recovered as of the latest data.',
@@ -867,84 +851,45 @@ function DrawdownExplorer({ token, onSignIn, initialEventId, clearInitialEvent }
   const resultRef = useRef(null);
 
   useEffect(() => {
-    if (!initialEventId) return;
-
-    let cancelled = false;
-
-    async function loadInitialEvent() {
-      try {
-        setError(null);
-        setPredictError(null);
-        setPrediction(null);
-        setPredictLoading(true);
-        setHasSearched(true);
-
-        const eventRes = await fetch(`${API_URL}/api/drawdowns/${initialEventId}`);
-
-        if (!eventRes.ok) {
-          if (!cancelled) {
-            setError('Could not load the suggested drawdown.');
-          }
-          return;
-        }
-
-        const eventData = await eventRes.json();
-
-        if (cancelled) return;
-
-        setTicker(eventData.ticker);
-        setEvents([eventData]);
-        setSelectedEventId(eventData.id);
-
-        await runPredictionForEvent(eventData.id);
-
-        if (!cancelled) {
-          clearInitialEvent?.();
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setError('Could not load the suggested drawdown.');
-        }
-      } finally {
-        if (!cancelled) {
-          setPredictLoading(false);
-        }
-      }
-    }
-
-    loadInitialEvent();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [initialEventId, token]);
-
-  useEffect(() => {
     async function loadTickers() {
-      const response = await fetch(`${API_URL}/api/tickers`);
-      const data = await response.json();
-      setAllTickers(data);
+      try {
+        const response = await fetch(`${API_URL}/api/tickers`);
+        if (!response.ok) throw new Error(`Ticker request failed: ${response.status}`);
+        const data = await response.json();
+        if (!Array.isArray(data)) throw new Error('Ticker response was not a list');
+        setAllTickers(data);
+      } catch (err) {
+        console.error('Unable to load tickers', err);
+        setError('Could not load the ticker list.');
+      }
     }
     loadTickers();
   }, []);
 
   useEffect(() => {
-    if (!prediction) {
-      setSectorBenchmark(null);
-      setPriceHistory(null);
-      return;
-    }
+    if (!prediction) return;
+
+    let cancelled = false;
 
     async function loadEnrichment() {
-      const [benchmarkRes, pricesRes] = await Promise.all([
-        fetch(`${API_URL}/api/sectors/${encodeURIComponent(prediction.sector)}/benchmark`),
-        fetch(`${API_URL}/api/drawdowns/${prediction.drop_event_id}/prices`),
-      ]);
+      try {
+        const benchmarkResult = await fetch(
+          `${API_URL}/api/sectors/${encodeURIComponent(prediction.sector)}/benchmark`
+        );
 
-      if (benchmarkRes.ok) setSectorBenchmark(await benchmarkRes.json());
-      if (pricesRes.ok) setPriceHistory(await pricesRes.json());
+        if (cancelled) return;
+        if (benchmarkResult.ok) {
+          setSectorBenchmark(await benchmarkResult.json());
+        }
+      } catch (err) {
+        console.error('Unable to load prediction enrichment', err);
+      }
     }
     loadEnrichment();
+
+    return () => {
+      cancelled = true;
+    };
   }, [prediction]);
 
   useEffect(() => {
@@ -974,16 +919,18 @@ function DrawdownExplorer({ token, onSignIn, initialEventId, clearInitialEvent }
     setSelectedEventId(null);
     setPrediction(null);
 
-    const response = await fetch(`${API_URL}/api/drawdowns?ticker=${normalizedTicker}`);
-    setHasSearched(true);
+    try {
+      const response = await fetch(`${API_URL}/api/drawdowns?ticker=${encodeURIComponent(normalizedTicker)}`);
+      setHasSearched(true);
 
-    if (!response.ok) {
+      if (!response.ok) throw new Error(`Drawdown request failed: ${response.status}`);
+      const data = await response.json();
+      if (!Array.isArray(data)) throw new Error('Drawdown response was not a list');
+      setEvents(data);
+    } catch (err) {
+      console.error('Unable to load drawdowns', err);
       setError('Could not load drawdowns for that ticker.');
-      return;
     }
-
-    const data = await response.json();
-    setEvents(data);
   }
 
   async function handleSearch(e) {
@@ -995,6 +942,28 @@ function DrawdownExplorer({ token, onSignIn, initialEventId, clearInitialEvent }
     setSelectedEventId(eventId);
     setPrediction(null);
     setPredictError(null);
+    loadPriceHistory(eventId);
+  }
+
+  async function loadPriceHistory(eventId) {
+    if (!eventId) return null;
+    if (priceHistoryCache.has(eventId)) {
+      const cached = priceHistoryCache.get(eventId);
+      setPriceHistory(cached);
+      return cached;
+    }
+
+    try {
+      const response = await fetch(`${API_URL}/api/drawdowns/${eventId}/prices`);
+      if (!response.ok) throw new Error(`Price history request failed: ${response.status}`);
+      const data = await response.json();
+      priceHistoryCache.set(eventId, data);
+      setPriceHistory(data);
+      return data;
+    } catch (err) {
+      console.error('Unable to load recovery path', err);
+      return null;
+    }
   }
 
   async function runPredictionForEvent(eventId) {
@@ -1003,6 +972,10 @@ function DrawdownExplorer({ token, onSignIn, initialEventId, clearInitialEvent }
     setPredictError(null);
     setPredictLoading(true);
     setPrediction(null);
+
+    // Start the chart request immediately instead of waiting for model scoring.
+    // It will usually be ready by the time the prediction results render.
+    loadPriceHistory(eventId);
 
     const headers = { 'Content-Type': 'application/json' };
 
@@ -1035,6 +1008,52 @@ function DrawdownExplorer({ token, onSignIn, initialEventId, clearInitialEvent }
     }
   }
 
+  useEffect(() => {
+    if (!initialEventId) return;
+
+    let cancelled = false;
+
+    async function loadInitialEvent() {
+      try {
+        setError(null);
+        setPredictError(null);
+        setPrediction(null);
+        setPredictLoading(true);
+        setHasSearched(true);
+
+        const eventRes = await fetch(`${API_URL}/api/drawdowns/${initialEventId}`);
+
+        if (!eventRes.ok) {
+          if (!cancelled) setError('Could not load the suggested drawdown.');
+          return;
+        }
+
+        const eventData = await eventRes.json();
+        if (cancelled) return;
+
+        setTicker(eventData.ticker);
+        setEvents([eventData]);
+        setSelectedEventId(eventData.id);
+        await runPredictionForEvent(eventData.id);
+
+        if (!cancelled) clearInitialEvent?.();
+      } catch {
+        if (!cancelled) setError('Could not load the suggested drawdown.');
+      } finally {
+        if (!cancelled) setPredictLoading(false);
+      }
+    }
+
+    loadInitialEvent();
+
+    return () => {
+      cancelled = true;
+    };
+    // runPredictionForEvent intentionally follows the latest token; initialEventId
+    // is the navigation trigger for this one-shot load.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialEventId, token, clearInitialEvent]);
+
   async function handlePredict() {
     if (!selectedEventId) return;
     await runPredictionForEvent(selectedEventId);
@@ -1043,7 +1062,7 @@ function DrawdownExplorer({ token, onSignIn, initialEventId, clearInitialEvent }
   const selectedEvent = events.find(e => e.id === selectedEventId) || null;
   const predictedEvent = prediction ? events.find(e => e.id === prediction.drop_event_id) : null;
   const actualFastRecovery =
-    predictedEvent && predictedEvent.days_to_recovery !== null
+    predictedEvent && predictedEvent.days_to_recovery != null
       ? predictedEvent.days_to_recovery <= 180
       : null;
   const isMatch =
@@ -1051,8 +1070,6 @@ function DrawdownExplorer({ token, onSignIn, initialEventId, clearInitialEvent }
       ? actualFastRecovery === prediction.predicted_fast_recovery
       : null;
   const outcome = predictedEvent ? describeOutcome(predictedEvent.days_to_recovery) : null;
-  const modelSignalStroke =
-    isMatch === false ? '#B91C1C' : prediction?.predicted_fast_recovery ? '#047857' : '#64748B';
   const modelSignalBadgeClass =
     isMatch === false
       ? badgeDanger

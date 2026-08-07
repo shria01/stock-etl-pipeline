@@ -33,7 +33,13 @@ function RegisterForm({ onRegisterSuccess }) {
         body: JSON.stringify({ email, password })
       });
 
-      onRegisterSuccess(data.access_token);
+      const loginData = await loginResponse.json();
+      if (!loginResponse.ok) {
+        setError(loginData.detail || 'Your account was created, but sign-in failed.');
+        return;
+      }
+
+      onRegisterSuccess(loginData.access_token);
 
     } catch (err) {
       console.error("Error connecting to FastAPI:", err);

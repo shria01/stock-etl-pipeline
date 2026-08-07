@@ -46,6 +46,17 @@ function App() {
     });
   }
 
+  async function handleAuthSuccess(newToken) {
+    // Claim guest predictions before mounting the signed-in dashboard; otherwise
+    // its first history request can race the claim and incorrectly show zeroes.
+    await Promise.allSettled([
+      claimPredictions(newToken),
+      fetchUserInfo(newToken),
+    ]);
+    setToken(newToken);
+    setAuthView(null);
+  }
+
   const currentLabel = NAV_ITEMS.find(item => item.id === currentPage)?.label;
 
   return (
@@ -189,23 +200,13 @@ function App() {
 
             {authView === 'login' && (
               <LoginForm
-                onLoginSuccess={(t) => {
-                  setToken(t);
-                  fetchUserInfo(t);
-                  claimPredictions(t);
-                  setAuthView(null);
-                }}
+                onLoginSuccess={handleAuthSuccess}
               />
             )}
 
             {authView === 'register' && (
               <RegisterForm
-                onRegisterSuccess={(t) => {
-                  setToken(t);
-                  fetchUserInfo(t);
-                  claimPredictions(t);
-                  setAuthView(null);
-                }}
+                onRegisterSuccess={handleAuthSuccess}
               />
             )}
           </div>
