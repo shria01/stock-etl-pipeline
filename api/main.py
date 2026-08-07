@@ -2,9 +2,9 @@ from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.orm import Session
 from api.database import get_db
 from api.models import User, Prediction
-from api.schemas import UserCreate, UserPublic, UserLogin, Token, PredictionRequest, PredictionResponse, PredictionHistoryItem
+from api.schemas import UserCreate, UserPublic, UserLogin, Token, PredictionRequest, PredictionResponse
 from api.security import hash_password, verify_password, create_access_token, decode_access_token
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy import text
 from ml.predict_recovery import predict_recovery, get_model_data
@@ -82,18 +82,10 @@ def read_me(current_user: User = Depends(get_current_user)):
 @app.post("/api/predict", response_model=PredictionResponse)
 def predict(request: PredictionRequest, db: Session = Depends(get_db), current_user: User | None = Depends(get_current_user_optional)):
     query = text("""
-        SELECT de.id, de.ticker, s.sector, de.drop_pct, de.event_max_drawdown_pct,
-               de.drawdown_velocity_pct_per_day,
+        SELECT de.id, de.ticker, s.sector, de.drop_pct,
                de.volatility_90d, de.prior_90d_return, de.volume_change_pct,
                de.distance_from_52w_high, de.relative_drop_pct,
-               de.relative_prior_90d_return, de.sector_relative_drop_pct,
-               de.sp500_volatility_90d, de.sp500_return_20d,
-               de.sp500_return_90d, de.sp500_distance_from_52w_high,
-               de.market_breadth_below_200d,
-               de.ticker_prior_fast_recovery_rate,
-               de.ticker_prior_median_days_to_recovery,
-               de.ticker_prior_event_count,
-               de.ticker_prior_avg_drawdown
+               de.relative_prior_90d_return, de.sector_relative_drop_pct
         FROM drop_events de
         JOIN symbols s ON de.ticker = s.ticker
         WHERE de.id = :event_id
@@ -106,8 +98,14 @@ def predict(request: PredictionRequest, db: Session = Depends(get_db), current_u
     feature_dict = dict(result)
     ticker = feature_dict.pop("ticker")
     prediction = predict_recovery(feature_dict)
-    survival_curve = predict_survival(feature_dict)
-    survival_model_version = get_survival_model_data().get("model_version", "unknown")
+    # The survival model is a separate research artifact and is optional in
+    # production. The active classifier must remain usable when it is absent.
+    try:
+        survival_curve = predict_survival(feature_dict)
+        survival_model_version = get_survival_model_data().get("model_version", "unavailable")
+    except (FileNotFoundError, OSError, KeyError, ValueError):
+        survival_curve = []
+        survival_model_version = "unavailable"
     if current_user is not None:
         new_prediction = Prediction(
             user_id=current_user.id,
@@ -196,13 +194,9 @@ def get_sectors(db: Session = Depends(get_db)):
 def get_drawdowns(ticker: str, db: Session = Depends(get_db)):
     query = text("""
         SELECT de.id, de.ticker, de.drop_quarter, de.drop_pct,
-               de.event_max_drawdown_pct, de.prediction_date,
-               de.days_to_recovery_after_prediction AS days_to_recovery,
-               de.recovered_within_180d_after_prediction,
-               de.model_exclusion_reason
+               de.days_to_recovery, de.recovered_within_1yr
         FROM drop_events de
         WHERE de.ticker = :ticker
-          AND de.recovered_within_180d_after_prediction IS NOT NULL
         ORDER BY de.drop_quarter DESC
     """)
     result = db.execute(query, {"ticker": ticker}).mappings().all()
