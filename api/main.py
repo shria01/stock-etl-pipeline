@@ -205,7 +205,8 @@ def get_drawdowns(ticker: str, db: Session = Depends(get_db)):
 @app.get("/api/drawdowns/{event_id}")
 def get_drawdowns_by_id(event_id: int, db: Session = Depends(get_db)):
     query = text("""
-        SELECT de.id, de.ticker, de.drop_quarter, de.drop_pct
+        SELECT de.id, de.ticker, de.drop_quarter, de.drop_pct,
+               de.days_to_recovery, de.recovered_within_1yr
         FROM drop_events de
         WHERE de.id = :event_id
     """)
