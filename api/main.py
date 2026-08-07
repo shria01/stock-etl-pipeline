@@ -9,7 +9,6 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy import text
 from ml.predict_recovery import predict_recovery, get_model_data
 from fastapi.middleware.cors import CORSMiddleware
-from datetime import timedelta
 
 app = FastAPI()
 app.add_middleware(
@@ -232,20 +231,34 @@ def get_sector_benchmark(sector: str, db: Session = Depends(get_db)):
 @app.get("/api/drawdowns/{event_id}/prices")
 def get_drawdown_prices(event_id: int, db: Session = Depends(get_db)):
     event_query = text("""
-        SELECT ticker, trough_date, baseline_price, trough_price, recovered_date, days_to_recovery
-        FROM drop_events
-        WHERE id = :event_id
+        SELECT
+            de.ticker,
+            de.drop_quarter,
+            de.trough_date,
+            de.baseline_price,
+            de.trough_price,
+            de.recovered_date,
+            de.days_to_recovery,
+            (
+                SELECT MIN(sp.price_date)
+                FROM stock_prices sp
+                WHERE sp.ticker = de.ticker
+                  AND sp.price_date >= de.drop_quarter
+            ) AS baseline_date,
+            (
+                SELECT MAX(sp.price_date)
+                FROM stock_prices sp
+                WHERE sp.ticker = de.ticker
+            ) AS latest_price_date
+        FROM drop_events de
+        WHERE de.id = :event_id
     """)
     event = db.execute(event_query, {"event_id": event_id}).first()
     if event is None:
         raise HTTPException(status_code=404, detail="Event not found")
 
-    start_date = event.trough_date - timedelta(days=90)
-    if event.days_to_recovery is not None and event.days_to_recovery > 180:
-        window_days = event.days_to_recovery + 14
-    else:
-        window_days = 180
-    end_date = event.trough_date + timedelta(days=window_days)
+    start_date = event.baseline_date or event.drop_quarter
+    end_date = event.recovered_date or event.latest_price_date
 
     prices_query = text("""
         SELECT price_date, close
@@ -258,6 +271,7 @@ def get_drawdown_prices(event_id: int, db: Session = Depends(get_db)):
 
     return {
         "ticker": event.ticker,
+        "baseline_date": start_date,
         "trough_date": event.trough_date,
         "baseline_price": event.baseline_price,
         "trough_price": event.trough_price,
