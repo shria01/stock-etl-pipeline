@@ -166,7 +166,7 @@ def get_my_predictions(
 
             de.ticker,
             de.drop_quarter,
-            de.days_to_recovery_after_prediction AS days_to_recovery,
+            de.days_to_recovery,
             de.recovered_within_1yr
         FROM predictions p
         LEFT JOIN drop_events de
