@@ -177,8 +177,25 @@ def get_my_predictions(
 
             de.ticker,
             de.drop_quarter,
-            de.days_to_recovery,
-            de.recovered_within_1yr
+            COALESCE(
+                (to_jsonb(de) ->> 'days_to_recovery_after_prediction')::integer,
+                (to_jsonb(de) ->> 'recovered_date')::date - (to_jsonb(de) ->> 'prediction_date')::date,
+                de.days_to_recovery
+            ) AS days_to_recovery,
+            COALESCE(
+                (to_jsonb(de) ->> 'recovered_within_180d_after_prediction')::boolean,
+                CASE
+                    WHEN (to_jsonb(de) ->> 'recovered_date') IS NOT NULL
+                         AND (to_jsonb(de) ->> 'prediction_date') IS NOT NULL
+                    THEN (to_jsonb(de) ->> 'recovered_date')::date - (to_jsonb(de) ->> 'prediction_date')::date <= 180
+                    WHEN de.days_to_recovery IS NULL THEN NULL ELSE de.days_to_recovery <= 180
+                END
+            ) AS recovered_within_180d_after_prediction,
+            COALESCE(
+                (to_jsonb(de) ->> 'event_max_drawdown_pct')::numeric,
+                (to_jsonb(de) ->> 'max_drawdown_pct')::numeric,
+                de.drop_pct
+            ) AS event_max_drawdown_pct
         FROM predictions p
         LEFT JOIN drop_events de
             ON p.drop_event_id = de.id
@@ -207,7 +224,20 @@ def get_sectors(db: Session = Depends(get_db)):
 def get_drawdowns(ticker: str, db: Session = Depends(get_db)):
     query = text("""
         SELECT de.id, de.ticker, de.drop_quarter, de.drop_pct,
-               de.days_to_recovery, de.recovered_within_1yr,
+               COALESCE(
+                   (to_jsonb(de) ->> 'days_to_recovery_after_prediction')::integer,
+                   (to_jsonb(de) ->> 'recovered_date')::date - (to_jsonb(de) ->> 'prediction_date')::date,
+                   de.days_to_recovery
+               ) AS days_to_recovery,
+               COALESCE(
+                   (to_jsonb(de) ->> 'recovered_within_180d_after_prediction')::boolean,
+                   CASE
+                       WHEN (to_jsonb(de) ->> 'recovered_date') IS NOT NULL
+                            AND (to_jsonb(de) ->> 'prediction_date') IS NOT NULL
+                       THEN (to_jsonb(de) ->> 'recovered_date')::date - (to_jsonb(de) ->> 'prediction_date')::date <= 180
+                       WHEN de.days_to_recovery IS NULL THEN NULL ELSE de.days_to_recovery <= 180
+                   END
+               ) AS recovered_within_180d_after_prediction,
                COALESCE(
                    (to_jsonb(de) ->> 'event_max_drawdown_pct')::numeric,
                    (to_jsonb(de) ->> 'max_drawdown_pct')::numeric,
@@ -223,6 +253,7 @@ def get_drawdowns(ticker: str, db: Session = Depends(get_db)):
                ) AS drawdown_velocity_pct_per_day
         FROM drop_events de
         WHERE de.ticker = :ticker
+          AND (to_jsonb(de) ->> 'model_exclusion_reason') IS NULL
         ORDER BY de.drop_quarter DESC
     """)
     result = db.execute(query, {"ticker": ticker}).mappings().all()
@@ -232,7 +263,20 @@ def get_drawdowns(ticker: str, db: Session = Depends(get_db)):
 def get_drawdowns_by_id(event_id: int, db: Session = Depends(get_db)):
     query = text("""
         SELECT de.id, de.ticker, de.drop_quarter, de.drop_pct,
-               de.days_to_recovery, de.recovered_within_1yr,
+               COALESCE(
+                   (to_jsonb(de) ->> 'days_to_recovery_after_prediction')::integer,
+                   (to_jsonb(de) ->> 'recovered_date')::date - (to_jsonb(de) ->> 'prediction_date')::date,
+                   de.days_to_recovery
+               ) AS days_to_recovery,
+               COALESCE(
+                   (to_jsonb(de) ->> 'recovered_within_180d_after_prediction')::boolean,
+                   CASE
+                       WHEN (to_jsonb(de) ->> 'recovered_date') IS NOT NULL
+                            AND (to_jsonb(de) ->> 'prediction_date') IS NOT NULL
+                       THEN (to_jsonb(de) ->> 'recovered_date')::date - (to_jsonb(de) ->> 'prediction_date')::date <= 180
+                       WHEN de.days_to_recovery IS NULL THEN NULL ELSE de.days_to_recovery <= 180
+                   END
+               ) AS recovered_within_180d_after_prediction,
                COALESCE(
                    (to_jsonb(de) ->> 'event_max_drawdown_pct')::numeric,
                    (to_jsonb(de) ->> 'max_drawdown_pct')::numeric,
@@ -266,8 +310,25 @@ def get_sector_benchmark(sector: str, db: Session = Depends(get_db)):
         SELECT
             s.sector,
             COUNT(*) AS total_events,
-            AVG(CASE WHEN de.days_to_recovery IS NOT NULL AND de.days_to_recovery <= 180 THEN 1.0 ELSE 0.0 END) AS sector_fast_recovery_rate,
-            PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY de.days_to_recovery) FILTER (WHERE de.days_to_recovery IS NOT NULL) AS median_days_to_recovery
+            AVG(
+                COALESCE(
+                    ((to_jsonb(de) ->> 'recovered_within_180d_after_prediction')::boolean)::integer,
+                    CASE WHEN de.days_to_recovery IS NULL THEN NULL ELSE (de.days_to_recovery <= 180)::integer END
+                )
+            ) AS sector_fast_recovery_rate,
+            PERCENTILE_CONT(0.5) WITHIN GROUP (
+                ORDER BY COALESCE(
+                    (to_jsonb(de) ->> 'days_to_recovery_after_prediction')::integer,
+                    (to_jsonb(de) ->> 'recovered_date')::date - (to_jsonb(de) ->> 'prediction_date')::date,
+                    de.days_to_recovery
+                )
+            ) FILTER (
+                WHERE COALESCE(
+                    (to_jsonb(de) ->> 'days_to_recovery_after_prediction')::integer,
+                    (to_jsonb(de) ->> 'recovered_date')::date - (to_jsonb(de) ->> 'prediction_date')::date,
+                    de.days_to_recovery
+                ) IS NOT NULL
+            ) AS median_days_to_recovery
         FROM drop_events de
         JOIN symbols s ON de.ticker = s.ticker
         WHERE s.sector = :sector
