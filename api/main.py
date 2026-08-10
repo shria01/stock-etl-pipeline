@@ -198,12 +198,13 @@ def get_sectors(db: Session = Depends(get_db)):
 @app.get("/api/drawdowns")
 def get_drawdowns(ticker: str, db: Session = Depends(get_db)):
     query = text("""
-        SELECT de.id, de.ticker, de.drop_quarter, de.drop_pct,
+        SELECT de.id, de.ticker, s.company, de.drop_quarter, de.drop_pct,
                de.days_to_recovery_after_prediction AS days_to_recovery,
                de.recovered_within_180d_after_prediction,
                de.event_max_drawdown_pct,
                de.drawdown_velocity_pct_per_day
         FROM drop_events de
+        JOIN symbols s ON de.ticker = s.ticker
         WHERE de.ticker = :ticker
           AND de.model_exclusion_reason IS NULL
         ORDER BY de.drop_quarter DESC
@@ -211,15 +212,36 @@ def get_drawdowns(ticker: str, db: Session = Depends(get_db)):
     result = db.execute(query, {"ticker": ticker}).mappings().all()
     return result
 
+@app.get("/api/drawdowns/recent")
+def get_recent_drawdowns(limit: int = 12, db: Session = Depends(get_db)):
+    query = text("""
+        SELECT
+            de.id,
+            de.ticker,
+            s.company,
+            de.drop_quarter,
+            de.drop_pct,
+            de.event_max_drawdown_pct,
+            de.drawdown_velocity_pct_per_day
+        FROM drop_events de
+        JOIN symbols s ON de.ticker = s.ticker
+        WHERE de.model_exclusion_reason IS NULL
+        ORDER BY de.drop_quarter DESC, de.id DESC
+        LIMIT :limit
+    """)
+    result = db.execute(query, {"limit": min(max(limit, 1), 50)}).mappings().all()
+    return result
+
 @app.get("/api/drawdowns/{event_id}")
 def get_drawdowns_by_id(event_id: int, db: Session = Depends(get_db)):
     query = text("""
-        SELECT de.id, de.ticker, de.drop_quarter, de.drop_pct,
+        SELECT de.id, de.ticker, s.company, de.drop_quarter, de.drop_pct,
                de.days_to_recovery_after_prediction AS days_to_recovery,
                de.recovered_within_180d_after_prediction,
                de.event_max_drawdown_pct,
                de.drawdown_velocity_pct_per_day
         FROM drop_events de
+        JOIN symbols s ON de.ticker = s.ticker
         WHERE de.id = :event_id
     """)
     result = db.execute(query, {"event_id": event_id}).mappings().first()
@@ -231,6 +253,16 @@ def get_drawdowns_by_id(event_id: int, db: Session = Depends(get_db)):
 def get_tickers(db: Session = Depends(get_db)):
     query = text("SELECT ticker FROM symbols ORDER BY ticker")
     result = db.execute(query).scalars().all()
+    return result
+
+@app.get("/api/symbols")
+def get_symbols(db: Session = Depends(get_db)):
+    query = text("""
+        SELECT ticker, company
+        FROM symbols
+        ORDER BY ticker
+    """)
+    result = db.execute(query).mappings().all()
     return result
 
 @app.get("/api/sectors/{sector}/benchmark")
