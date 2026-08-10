@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.orm import Session
 from api.database import get_db
@@ -265,6 +267,8 @@ def get_drawdown_prices(event_id: int, db: Session = Depends(get_db)):
             de.trough_price,
             de.recovered_date,
             de.days_to_recovery,
+            de.recovery_path_low_date,
+            de.recovery_path_max_drawdown_pct,
             (
                 SELECT MIN(sp.price_date)
                 FROM stock_prices sp
@@ -283,8 +287,15 @@ def get_drawdown_prices(event_id: int, db: Session = Depends(get_db)):
     if event is None:
         raise HTTPException(status_code=404, detail="Event not found")
 
-    start_date = event.baseline_date or event.drop_quarter
-    end_date = event.recovered_date or event.latest_price_date
+    baseline_date = event.baseline_date or event.drop_quarter
+    start_date = baseline_date - timedelta(days=30)
+    end_date = event.latest_price_date
+
+    if event.recovered_date is not None:
+        end_date = min(
+            event.recovered_date + timedelta(days=30),
+            event.latest_price_date,
+        )
 
     prices_query = text("""
         SELECT price_date, close
@@ -297,12 +308,16 @@ def get_drawdown_prices(event_id: int, db: Session = Depends(get_db)):
 
     return {
         "ticker": event.ticker,
-        "baseline_date": start_date,
+        "baseline_date": baseline_date,
+        "window_start_date": start_date,
+        "window_end_date": end_date,
         "trough_date": event.trough_date,
         "baseline_price": event.baseline_price,
         "trough_price": event.trough_price,
         "recovered_date": event.recovered_date,
         "days_to_recovery": event.days_to_recovery,
+        "recovery_path_low_date": event.recovery_path_low_date,
+        "recovery_path_max_drawdown_pct": event.recovery_path_max_drawdown_pct,
         "prices": prices,
     }
 
