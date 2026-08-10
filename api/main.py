@@ -168,9 +168,16 @@ def get_my_predictions(
 
             de.ticker,
             de.drop_quarter,
+            de.prediction_date,
+            de.recovered_date,
             de.days_to_recovery_after_prediction AS days_to_recovery,
             de.recovered_within_180d_after_prediction,
-            de.event_max_drawdown_pct
+            de.event_max_drawdown_pct,
+            (
+                SELECT MAX(sp.price_date)
+                FROM stock_prices sp
+                WHERE sp.ticker = de.ticker
+            ) AS latest_price_date
         FROM predictions p
         LEFT JOIN drop_events de
             ON p.drop_event_id = de.id
@@ -179,7 +186,30 @@ def get_my_predictions(
     """)
 
     rows = db.execute(query, {"user_id": current_user.id}).mappings().all()
-    return [dict(row) for row in rows]
+    history = []
+    for row in rows:
+        item = dict(row)
+        prediction_date = item.get("prediction_date")
+        recovered_date = item.get("recovered_date")
+        latest_price_date = item.get("latest_price_date")
+        deadline = prediction_date + timedelta(days=180) if prediction_date else None
+
+        if deadline and recovered_date and recovered_date <= deadline:
+            item["actual_fast_recovery"] = True
+            item["actual_status"] = "fast_recovery"
+        elif deadline and latest_price_date and latest_price_date >= deadline:
+            item["actual_fast_recovery"] = False
+            item["actual_status"] = "not_recovered_within_180d"
+        else:
+            item["actual_fast_recovery"] = None
+            item["actual_status"] = "evaluation_window_open"
+
+        item["evaluation_deadline"] = deadline
+        if item.get("days_to_recovery") is None and prediction_date and recovered_date:
+            item["days_to_recovery"] = (recovered_date - prediction_date).days
+        history.append(item)
+
+    return history
 
 @app.post("/api/predictions/claim")
 def claim_predictions(session_id: str, db: Session = Depends(get_db),current_user: User = Depends(get_current_user)):
@@ -349,6 +379,7 @@ def get_drawdown_prices(event_id: int, db: Session = Depends(get_db)):
         "baseline_date": baseline_date,
         "window_start_date": start_date,
         "window_end_date": end_date,
+        "latest_price_date": event.latest_price_date,
         "trough_date": event.trough_date,
         "baseline_price": event.baseline_price,
         "trough_price": event.trough_price,
