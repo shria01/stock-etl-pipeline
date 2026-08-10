@@ -265,8 +265,9 @@ def get_drawdown_prices(event_id: int, db: Session = Depends(get_db)):
             de.trough_date,
             de.baseline_price,
             de.trough_price,
+            de.prediction_date,
             de.recovered_date,
-            de.days_to_recovery,
+            de.days_to_recovery_after_prediction AS days_to_recovery,
             de.recovery_path_low_date,
             de.recovery_path_max_drawdown_pct,
             (
@@ -314,6 +315,7 @@ def get_drawdown_prices(event_id: int, db: Session = Depends(get_db)):
         "trough_date": event.trough_date,
         "baseline_price": event.baseline_price,
         "trough_price": event.trough_price,
+        "prediction_date": event.prediction_date,
         "recovered_date": event.recovered_date,
         "days_to_recovery": event.days_to_recovery,
         "recovery_path_low_date": event.recovery_path_low_date,
