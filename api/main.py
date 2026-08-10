@@ -339,8 +339,13 @@ def get_drawdown_prices(event_id: int, db: Session = Depends(get_db)):
     """)
     prices = db.execute(prices_query, {"ticker": event.ticker, "start_date": start_date, "end_date": end_date}).mappings().all()
 
+    days_to_recovery = event.days_to_recovery
+    if days_to_recovery is None and event.prediction_date is not None and event.recovered_date is not None:
+        days_to_recovery = (event.recovered_date - event.prediction_date).days
+
     return {
         "ticker": event.ticker,
+        "drop_quarter": event.drop_quarter,
         "baseline_date": baseline_date,
         "window_start_date": start_date,
         "window_end_date": end_date,
@@ -349,7 +354,7 @@ def get_drawdown_prices(event_id: int, db: Session = Depends(get_db)):
         "trough_price": event.trough_price,
         "prediction_date": event.prediction_date,
         "recovered_date": event.recovered_date,
-        "days_to_recovery": event.days_to_recovery,
+        "days_to_recovery": days_to_recovery,
         "recovery_path_low_date": event.recovery_path_low_date,
         "recovery_path_max_drawdown_pct": event.recovery_path_max_drawdown_pct,
         "prices": prices,
