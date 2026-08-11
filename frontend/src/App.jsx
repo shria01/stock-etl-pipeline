@@ -14,20 +14,80 @@ const NAV_ITEMS = [
   { id: 'analysis', label: 'Model Analysis', icon: ChartNoAxesCombined, requiresAuth: false },
 ];
 
+const PAGE_QUERY_VALUES = {
+  dashboard: null,
+  browse: 'predict',
+  history: 'history',
+  analysis: 'model-analysis',
+};
+
+function readNavigationFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const pageValue = params.get('page');
+  const currentPage = Object.entries(PAGE_QUERY_VALUES).find(([, value]) => value === pageValue)?.[0] || 'dashboard';
+  const eventValue = Number(params.get('event'));
+
+  return {
+    currentPage,
+    initialEventId: currentPage === 'browse' && Number.isFinite(eventValue) && eventValue > 0
+      ? eventValue
+      : null,
+  };
+}
+
 function App() {
+  const initialNavigation = readNavigationFromUrl();
   const [token, setToken] = useState('');
   const [authView, setAuthView] = useState(null);
   const [userEmail, setUserEmail] = useState('');
-  const [currentPage, setCurrentPage] = useState('dashboard');
-  const [initialEventId, setInitialEventId] = useState(null);
+  const [currentPage, setCurrentPage] = useState(initialNavigation.currentPage);
+  const [initialEventId, setInitialEventId] = useState(initialNavigation.initialEventId);
 
   useEffect(() => {
     localStorage.removeItem('session_id');
   }, []);
 
+  useEffect(() => {
+    function handlePopState() {
+      const navigation = readNavigationFromUrl();
+      setCurrentPage(navigation.currentPage);
+      setInitialEventId(navigation.initialEventId);
+      setAuthView(null);
+    }
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  function navigateTo(page, eventId = null, { replace = false } = {}) {
+    const url = new URL(window.location.href);
+    const pageValue = PAGE_QUERY_VALUES[page];
+
+    if (pageValue) {
+      url.searchParams.set('page', pageValue);
+    } else {
+      url.searchParams.delete('page');
+    }
+
+    if (page === 'browse' && eventId) {
+      url.searchParams.set('event', String(eventId));
+    } else {
+      url.searchParams.delete('event');
+    }
+
+    const nextUrl = `${url.pathname}${url.search}${url.hash}`;
+    const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    if (nextUrl !== currentUrl) {
+      window.history[replace ? 'replaceState' : 'pushState']({}, '', nextUrl);
+    }
+
+    setCurrentPage(page);
+    setInitialEventId(page === 'browse' ? eventId : null);
+    window.scrollTo({ top: 0, behavior: 'auto' });
+  }
+
   function handleGoToPredict(eventId = null) {
-    setInitialEventId(eventId);
-    setCurrentPage('browse');
+    navigateTo('browse', eventId);
   }
 
   async function fetchUserInfo(newToken) {
@@ -47,15 +107,15 @@ function App() {
   function handleSignOut() {
     setToken('');
     setUserEmail('');
-    if (currentPage === 'history') setCurrentPage('dashboard');
+    if (currentPage === 'history') navigateTo('dashboard', null, { replace: true });
   }
 
   return (
     <div className="flex min-h-screen bg-[#F5F8FB] text-[#0B1220]">
       {/* SIDEBAR */}
-      <aside className="sticky top-0 flex h-screen w-[272px] flex-shrink-0 flex-col gap-4 p-5">
-        <div className="rounded-2xl bg-white p-4 shadow-[0_12px_30px_rgba(15,35,60,0.10)] ring-1 ring-[#E8EEF4]">
-          <div className="flex items-center gap-3">
+      <aside className="sticky top-0 flex h-screen w-[272px] flex-shrink-0 p-5">
+        <div className="flex min-h-0 flex-1 flex-col rounded-2xl bg-white p-3 shadow-[0_12px_30px_rgba(15,35,60,0.10)] ring-1 ring-[#E8EEF4]">
+          <div className="flex items-center gap-3 px-1 pb-4 pt-1">
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#12355B] text-white">
               <Activity className="h-5 w-5" />
             </div>
@@ -69,20 +129,14 @@ function App() {
               </p>
             </div>
           </div>
-        </div>
-
-        <div className="rounded-2xl bg-white p-3 shadow-[0_12px_30px_rgba(15,35,60,0.10)] ring-1 ring-[#E8EEF4]">
-          <nav className="flex flex-col gap-1">
+          <nav className="flex flex-col gap-1 border-t border-[#E8EEF4] pt-3">
             {NAV_ITEMS.filter(item => !item.requiresAuth || token).map(item => {
               const Icon = item.icon;
               return (
                 <button
                   key={item.id}
                   onClick={() => {
-                    if (item.id === 'browse') {
-                      setInitialEventId(null);
-                    }
-                    setCurrentPage(item.id);
+                    navigateTo(item.id);
                   }}
                   className={`flex cursor-pointer items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold transition-all ${
                     currentPage === item.id
@@ -97,7 +151,7 @@ function App() {
             })}
           </nav>
 
-          <div className="mt-3 border-t border-[#E8EEF4] pt-3">
+          <div className="mt-auto border-t border-[#E8EEF4] pt-3">
           {!token && (
             <div className="flex flex-col gap-1">
               <button
@@ -155,8 +209,8 @@ function App() {
               onSignIn={() => setAuthView('login')}
               onRegister={() => setAuthView('register')}
               onGoToPredict={handleGoToPredict}
-              onGoToHistory={() => setCurrentPage('history')}
-              onGoToModelAnalysis={() => setCurrentPage('analysis')}
+              onGoToHistory={() => navigateTo('history')}
+              onGoToModelAnalysis={() => navigateTo('analysis')}
             />
           )}
 

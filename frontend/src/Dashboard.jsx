@@ -374,7 +374,7 @@ function Dashboard({ token, onSignIn, onRegister, onGoToPredict, onGoToHistory, 
       [
         'Drawdown',
         'Quarter low',
-        'Lowest adjusted close during the event quarter.',
+        'Lowest adjusted close during the quarter the event began.',
       ],
       [
         'Prediction date',
