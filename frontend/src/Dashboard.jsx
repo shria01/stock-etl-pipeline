@@ -117,7 +117,7 @@ function StatCard({ icon, value, label: statLabel }) {
 
 // One browsable-event card definition, reused everywhere a ticker/drawdown/
 // sparkline tile appears (guest and logged-in views alike).
-function SuggestedEventCard({ event, onSelect, actionLabel = "Open recovery path", eventCard = eventCardClass}) {
+function SuggestedEventCard({ event, onSelect, actionLabel = "Trace recovery path", eventCard = eventCardClass}) {
   const drawdownPct = event.drop_pct * 100;
 
   return (
@@ -191,7 +191,7 @@ function MethodologyDiagram({ steps }) {
 
           <text x="42" y="28" fill="#12355B" fontSize="12" fontFamily="JetBrains Mono, monospace">Baseline</text>
           <text x="958" y="28" textAnchor="end" fill="#05664F" fontSize="12" fontFamily="JetBrains Mono, monospace">Recovery</text>
-          <text x="310" y="190" textAnchor="middle" fill="#B91C1C" fontSize="12" fontFamily="JetBrains Mono, monospace">Event low</text>
+          <text x="310" y="190" textAnchor="middle" fill="#B91C1C" fontSize="12" fontFamily="JetBrains Mono, monospace">Drawdown</text>
           <text x="310" y="208" textAnchor="middle" fill="#D16767" fontSize="11" fontFamily="JetBrains Mono, monospace">−18% vs. baseline</text>
           <text x="590" y="103" textAnchor="middle" fill="#B45309" fontSize="12" fontFamily="JetBrains Mono, monospace">Prediction date</text>
 
@@ -372,9 +372,9 @@ function Dashboard({ token, onSignIn, onRegister, onGoToPredict, onGoToHistory, 
         'Quarter-start adjusted close.',
       ],
       [
-        'Event low',
+        'Drawdown',
         'Quarter low',
-        'Lowest adjusted close during the drawdown quarter.',
+        'Lowest adjusted close during the event quarter.',
       ],
       [
         'Prediction date',
@@ -390,44 +390,38 @@ function Dashboard({ token, onSignIn, onRegister, onGoToPredict, onGoToHistory, 
 
     return (
       <div className="mx-auto max-w-5xl text-[#0B1220]">
-        <section className="mb-8 grid gap-7 py-1 lg:grid-cols-[1.05fr_0.95fr] lg:items-start lg:gap-12">
-          <div>
-            <p className={`mb-3 ${label}`}>
-              DrawdownIQ Research
-            </p>
+        <section className="mb-8 py-1">
+          <p className={`mb-3 ${label}`}>
+            DrawdownIQ Research
+          </p>
 
-            <h1 className="type-page-title text-[#0B1220]">
-              S&amp;P 500 180-day forward recovery analysis
-            </h1>
+          <h1 className="type-page-title max-w-4xl text-[#0B1220]">
+            S&amp;P 500 180-day forward recovery analysis
+          </h1>
 
-            <div className="mt-5 flex flex-wrap gap-3">
-              <Button
-                onClick={() => onGoToPredict()}
-                className="h-9 cursor-pointer rounded-xl bg-[#12355B] px-4 text-sm font-semibold text-white hover:bg-[#082F49]"
-              >
-                Analyze a drawdown
-              </Button>
-
-              <Button
-                variant="outline"
-                onClick={onGoToModelAnalysis}
-                className="h-9 cursor-pointer rounded-xl border-[#DDE7F0] bg-white px-4 text-sm font-semibold text-[#12355B] hover:bg-[#F8FBFF] hover:text-[#082F49]"
-              >
-                Model analysis
-              </Button>
-            </div>
-          </div>
-
-          <div className="lg:pt-12">
+          <div className="mt-8 grid gap-6 max-w-4xl">
             <p className="type-body text-[#52637A]">
-              DrawdownIQ studies major quarterly selloffs among current S&amp;P 500 constituents and estimates whether stocks still below baseline at quarter-end recover during the next 180 days.
-            </p>
-            <p className="type-body mt-2 text-[#64748B]">
-              The project combines SQL event construction, point-in-time feature engineering, leakage-audited model evaluation, and a React dashboard for exploring historical recovery cases.
+              DrawdownIQ studies major quarterly selloffs among current S&amp;P 500 constituents and estimates whether stocks still below baseline at quarter-end recover during the next 180 days. The project combines SQL event construction, point-in-time feature engineering, leakage-audited model evaluation, and a React dashboard for exploring historical recovery cases.
             </p>
 
           </div>
 
+          <div className="mt-6 flex flex-wrap gap-3">
+            <Button
+              onClick={() => onGoToPredict()}
+              className="h-9 cursor-pointer rounded-xl bg-[#12355B] px-4 text-sm font-semibold text-white hover:bg-[#082F49]"
+            >
+              Analyze a drawdown
+            </Button>
+
+            <Button
+              variant="outline"
+              onClick={onGoToModelAnalysis}
+              className="h-9 cursor-pointer rounded-xl border-[#DDE7F0] bg-white px-4 text-sm font-semibold text-[#12355B] hover:bg-[#F8FBFF] hover:text-[#082F49]"
+            >
+              Model analysis
+            </Button>
+          </div>
         </section>
 
         <section id="methodology" className="mb-8 border-t border-[#DDE7F0] pt-8 scroll-mt-6">

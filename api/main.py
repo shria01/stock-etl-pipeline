@@ -1,4 +1,5 @@
 from datetime import timedelta
+import os
 
 from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -13,14 +14,26 @@ from ml.predict_recovery import predict_recovery, get_model_data
 from ml.survival_model import get_survival_model_data, predict_survival
 from fastapi.middleware.cors import CORSMiddleware
 
+frontend_origins = os.getenv("FRONTEND_URLS", "http://localhost:5173")
+allowed_origins = [
+    origin.strip().rstrip("/")
+    for origin in frontend_origins.split(",")
+    if origin.strip()
+]
+
 app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
 
 @app.post("/api/register", response_model=UserPublic)
 def register(user: UserCreate, db: Session = Depends(get_db)):
