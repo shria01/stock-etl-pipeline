@@ -945,13 +945,13 @@ function DrawdownExplorer({
     const stageTimers = [
       window.setTimeout(() => {
         if (inferenceRunRef.current === runId) setInferenceStep(1);
-      }, 800),
+      }, 900),
       window.setTimeout(() => {
         if (inferenceRunRef.current === runId) setInferenceStep(2);
-      }, 1700),
+      }, 1900),
       window.setTimeout(() => {
         if (inferenceRunRef.current === runId) setInferenceStep(3);
-      }, 2600),
+      }, 3000),
     ];
 
     loadPriceHistory(
@@ -986,7 +986,7 @@ function DrawdownExplorer({
       const [result] =
         await Promise.all([
           request,
-          new Promise(resolve => window.setTimeout(resolve, 3400)),
+          new Promise(resolve => window.setTimeout(resolve, 4000)),
         ]);
 
       if (result.error) throw result.error;
