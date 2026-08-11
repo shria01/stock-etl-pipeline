@@ -167,6 +167,7 @@ def get_my_predictions(
             p.created_at,
 
             de.ticker,
+            s.company,
             de.drop_quarter,
             de.prediction_date,
             de.recovered_date,
@@ -181,6 +182,8 @@ def get_my_predictions(
         FROM predictions p
         LEFT JOIN drop_events de
             ON p.drop_event_id = de.id
+        LEFT JOIN symbols s
+            ON de.ticker = s.ticker
         WHERE p.user_id = :user_id
         ORDER BY p.created_at DESC
     """)
