@@ -14,7 +14,7 @@ from ml.predict_recovery import predict_recovery, get_model_data
 from ml.survival_model import get_survival_model_data, predict_survival
 from fastapi.middleware.cors import CORSMiddleware
 
-frontend_origins = os.getenv("FRONTEND_URLS", "http://localhost:5173")
+frontend_origins = os.getenv("FRONTEND_URLS", "")
 allowed_origins = [
     origin.strip().rstrip("/")
     for origin in frontend_origins.split(",")
