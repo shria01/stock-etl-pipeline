@@ -25,7 +25,6 @@ class Token(BaseModel):
 
 class PredictionRequest(BaseModel):
     drop_event_id: int
-    session_id: str | None = None
 
 class SurvivalPoint(BaseModel):
     horizon_days: int

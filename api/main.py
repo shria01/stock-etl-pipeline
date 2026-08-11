@@ -110,29 +110,19 @@ def predict(request: PredictionRequest, db: Session = Depends(get_db), current_u
     except (FileNotFoundError, OSError, KeyError, ValueError):
         survival_curve = []
         survival_model_version = "unavailable"
+    # Anonymous users can run the model, but only authenticated predictions
+    # belong in saved history.
     if current_user is not None:
         new_prediction = Prediction(
             user_id=current_user.id,
-            session_id=None,
             drop_event_id=feature_dict.get("id"),
             sector=feature_dict.get("sector"),
             drop_pct=feature_dict.get("drop_pct"),
             predicted_probability=prediction["probability"],
             model_version=prediction.get("model_version", "unknown"),
         )
-    else:
-        new_prediction = Prediction(
-            user_id=None,
-            session_id=request.session_id,
-            drop_event_id=feature_dict.get("id"),
-            sector=feature_dict.get("sector"),
-            drop_pct=feature_dict.get("drop_pct"),
-            predicted_probability=prediction["probability"],
-            model_version=prediction.get("model_version", "unknown"),
-        )
-
-    db.add(new_prediction)
-    db.commit()
+        db.add(new_prediction)
+        db.commit()
     return {
         **prediction,
         "drop_event_id": request.drop_event_id,
@@ -158,7 +148,6 @@ def get_my_predictions(
         SELECT
             p.id,
             p.user_id,
-            p.session_id,
             p.drop_event_id,
             p.sector,
             p.drop_pct,
@@ -213,14 +202,6 @@ def get_my_predictions(
         history.append(item)
 
     return history
-
-@app.post("/api/predictions/claim")
-def claim_predictions(session_id: str, db: Session = Depends(get_db),current_user: User = Depends(get_current_user)):
-    result = db.query(Prediction).filter(Prediction.session_id == session_id,Prediction.user_id.is_(None)).update({"user_id": current_user.id, "session_id": None})
-    db.commit()
-    return {"claimed": result}
-
-
 
 @app.get("/api/sectors")
 def get_sectors(db: Session = Depends(get_db)):

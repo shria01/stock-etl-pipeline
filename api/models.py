@@ -24,7 +24,6 @@ class Prediction(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
-    session_id = Column(String, nullable=True, index=True)
     drop_event_id = Column(Integer, ForeignKey("drop_events.id"), nullable=True, index=True)
 
     sector = Column(String, nullable=True)
