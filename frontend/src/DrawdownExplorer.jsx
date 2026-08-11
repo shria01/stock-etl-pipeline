@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
 import CompanyLogo from '@/components/CompanyLogo';
 import { formatProbabilityPct } from '@/lib/formatters';
 import {
@@ -20,13 +19,17 @@ import {
 const API_URL = import.meta.env.VITE_API_URL;
 const priceHistoryCache = new Map();
 
-const card = 'rounded-xl border-[#DDE7F0] bg-white';
-
 const label = 'type-label text-[#64748B]';
 
 const buttonPrimary =
   'h-10 cursor-pointer rounded-xl bg-[#12355B] px-4 text-sm font-semibold text-white transition-colors hover:bg-[#082F49] disabled:cursor-not-allowed disabled:opacity-50';
 const dataFont = 'JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace';
+const inferenceSteps = [
+  'Loading the selected drawdown event',
+  'Building the point-in-time feature vector',
+  'Applying Model v3 preprocessing',
+  'Scoring 180-day recovery probability',
+];
 
 function parseDateOnly(value) {
   if (!value) return null;
@@ -614,6 +617,11 @@ function DrawdownExplorer({
   ] = useState(false);
 
   const [
+    inferenceStep,
+    setInferenceStep,
+  ] = useState(0);
+
+  const [
     sectorBenchmark,
     setSectorBenchmark,
   ] = useState(null);
@@ -623,15 +631,13 @@ function DrawdownExplorer({
     setPriceHistory,
   ] = useState(null);
 
-  const isAutoLoading =
-    Boolean(
-      initialEventId &&
-      predictLoading &&
-      !prediction
-    );
+  const isModelRunning = predictLoading && !prediction;
 
   const resultRef =
     useRef(null);
+
+  const inferenceRunRef =
+    useRef(0);
 
 
   useEffect(() => {
@@ -851,7 +857,7 @@ function DrawdownExplorer({
 
     setPriceHistory(null);
 
-    loadPriceHistory(
+    void runPredictionForEvent(
       eventId
     );
   }
@@ -933,6 +939,21 @@ function DrawdownExplorer({
 
     setPrediction(null);
 
+    setInferenceStep(0);
+
+    const runId = ++inferenceRunRef.current;
+    const stageTimers = [
+      window.setTimeout(() => {
+        if (inferenceRunRef.current === runId) setInferenceStep(1);
+      }, 800),
+      window.setTimeout(() => {
+        if (inferenceRunRef.current === runId) setInferenceStep(2);
+      }, 1700),
+      window.setTimeout(() => {
+        if (inferenceRunRef.current === runId) setInferenceStep(3);
+      }, 2600),
+    ];
+
     loadPriceHistory(
       eventId
     );
@@ -953,21 +974,25 @@ function DrawdownExplorer({
     };
 
     try {
-      const [response] =
+      const request = fetch(
+        `${API_URL}/api/predict`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(body),
+        }
+      ).then(response => ({ response })).catch(error => ({ error }));
+
+      const [result] =
         await Promise.all([
-          fetch(
-          `${API_URL}/api/predict`,
-          {
-            method: 'POST',
-            headers,
-            body:
-              JSON.stringify(
-                body
-              ),
-          }
-          ),
-          new Promise(resolve => window.setTimeout(resolve, 900)),
+          request,
+          new Promise(resolve => window.setTimeout(resolve, 3400)),
         ]);
+
+      if (result.error) throw result.error;
+      const { response } = result;
+
+      if (inferenceRunRef.current !== runId) return;
 
       if (!response.ok) {
         setPredictError(
@@ -995,9 +1020,10 @@ function DrawdownExplorer({
       );
 
     } finally {
-      setPredictLoading(
-        false
-      );
+      stageTimers.forEach(timer => window.clearTimeout(timer));
+      if (inferenceRunRef.current === runId) {
+        setPredictLoading(false);
+      }
     }
   }
 
@@ -1063,6 +1089,10 @@ function DrawdownExplorer({
           eventData.id
         );
 
+        await runPredictionForEvent(
+          eventData.id
+        );
+
         if (!cancelled) {
           clearInitialEvent?.();
         }
@@ -1089,30 +1119,13 @@ function DrawdownExplorer({
       cancelled = true;
     };
 
+    // runPredictionForEvent intentionally uses the current auth token for this one-time deep-link load.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     initialEventId,
     token,
     clearInitialEvent,
   ]);
-
-
-  async function handlePredict() {
-    if (!selectedEventId) {
-      return;
-    }
-
-    await runPredictionForEvent(
-      selectedEventId
-    );
-  }
-
-
-  const selectedEvent =
-    events.find(
-      e =>
-        e.id ===
-        selectedEventId
-    ) || null;
 
 
   const predictedEvent = prediction
@@ -1143,36 +1156,38 @@ function DrawdownExplorer({
   return (
     <div className="mx-auto max-w-[1180px] text-[#0B1220]">
 
-      {isAutoLoading && (
-        <Card className={`${card} p-6`}>
-
-          <div className="flex items-center gap-4">
-
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#E8F1F8]">
-
-              <div className="h-5 w-5 animate-spin rounded-full border-2 border-[#BFD2E3] border-t-[#0B4F7A]" />
-
+      {isModelRunning && (
+        <div className="mx-auto mt-[18vh] w-full max-w-2xl border-y border-[#DDE7F0] py-10" role="status" aria-live="polite">
+          <div className="flex items-start gap-5">
+            <div className="mt-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#FFF4E5]">
+              <div className="h-5 w-5 animate-spin rounded-full border-2 border-[#F2C98D] border-t-[#C96A12]" />
             </div>
-
-            <div>
-
-              <p className="text-sm font-semibold text-[#0B1220]">
-                Loading selected event
-              </p>
-
-              <p className="mt-1 text-sm text-[#64748B]">
-                Preparing the point-in-time event details. Model v3 has not been run yet.
-              </p>
-
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center justify-between gap-4">
+                <p className="text-base font-semibold text-[#0B1220]">Running Model v3</p>
+                <span className="font-mono text-xs text-[#8A9AAF]">Step {inferenceStep + 1} of 4</span>
+              </div>
+              <p className="mt-2 text-sm text-[#52637A]">{inferenceSteps[inferenceStep]}</p>
+              <div className="mt-5 h-1.5 overflow-hidden rounded-full bg-[#E8EEF4]">
+                <div
+                  className="h-full rounded-full bg-[#C96A12] transition-[width] duration-500 ease-out"
+                  style={{ width: `${[18, 43, 70, 94][inferenceStep]}%` }}
+                />
+              </div>
+              <div className="mt-5 grid gap-2 font-mono text-xs text-[#64748B] sm:grid-cols-2">
+                {inferenceSteps.map((step, index) => (
+                  <span key={step} className={index <= inferenceStep ? 'text-[#0B1220]' : 'text-[#A8B5C5]'}>
+                    {index < inferenceStep ? '✓' : index === inferenceStep ? '●' : '○'} {step}
+                  </span>
+                ))}
+              </div>
             </div>
-
           </div>
-
-        </Card>
+        </div>
       )}
 
 
-      {!isAutoLoading && (
+      {!isModelRunning && (
         <>
           {!prediction && (
             <div>
@@ -1260,49 +1275,7 @@ function DrawdownExplorer({
                 </div>
               </section>
 
-              {selectedEvent && (
-                <div className="sticky bottom-4 z-40 mt-5">
-                  <div className="relative flex w-full flex-col gap-4 overflow-hidden rounded-2xl border border-[#C9D9E7] border-t-[3px] border-t-[#12355B] bg-[#F8FBFF]/95 px-5 py-4 shadow-[0_12px_32px_rgba(15,35,60,0.22)] backdrop-blur sm:flex-row sm:items-center sm:justify-between">
-                    <div className="flex items-center gap-3">
-                      <CompanyLogo symbol={selectedEvent.ticker} size={38} />
-                      <div>
-                        <p className="text-xs font-semibold text-[#52637A]">Selected drawdown event</p>
-                        <p className="mt-0.5 text-sm font-semibold text-[#0B1220]">
-                          {selectedEvent.ticker}{selectedEvent.company ? ` · ${selectedEvent.company}` : ''}
-                        </p>
-                        <p className="mt-1 font-mono text-xs text-[#64748B]">
-                          Drop quarter {selectedEvent.drop_quarter} ·{' '}
-                          <span className="font-mono text-[#B4232C]">{formatPct(selectedEvent.event_max_drawdown_pct ?? selectedEvent.drop_pct)}</span>
-                        </p>
-                        <p className="mt-2 max-w-xl text-xs leading-5 text-[#64748B]">
-                          Ready for Model v3 scoring using only features available at the completed-quarter prediction date.
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      {predictError && <p className="text-xs text-[#B91C1C]">{predictError}</p>}
-                      {predictLoading ? (
-                        <div className="min-w-[260px] rounded-xl border border-[#D6E2EC] bg-white px-4 py-3 shadow-sm" role="status" aria-live="polite">
-                          <div className="flex items-center gap-2">
-                            <div className="h-4 w-4 animate-spin rounded-full border-2 border-[#BFD2E3] border-t-[#C96A12]" />
-                            <p className="text-sm font-semibold text-[#0B1220]">Running Model v3</p>
-                          </div>
-                          <div className="mt-2 grid gap-1 font-mono text-[11px] text-[#64748B]">
-                            <span>✓ Event selected</span>
-                            <span>Preparing point-in-time features…</span>
-                            <span>Applying training-time imputation…</span>
-                            <span className="text-[#B85C00]">Scoring 180-day recovery probability…</span>
-                          </div>
-                        </div>
-                      ) : (
-                        <Button onClick={handlePredict} className={`${buttonPrimary} h-12 rounded-xl px-8`}>
-                          Run recovery model
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
+              {predictError && <p className="mt-5 text-sm text-[#B91C1C]">{predictError}</p>}
             </div>
           )}
         </>
@@ -1315,31 +1288,6 @@ function DrawdownExplorer({
           className="mt-2 scroll-mt-24 rounded-lg bg-white px-6 py-10 animate-[fadeIn_220ms_ease-out] sm:px-10 sm:py-12"
         >
           <div className="mx-auto max-w-none">
-            <div className="mb-8 border-y border-[#DDE7F0] py-4">
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#8A9AAF]">Model run</p>
-                  <p className="mt-1 text-sm font-semibold text-[#047857]">Completed</p>
-                </div>
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#8A9AAF]">Model</p>
-                  <p className="mt-1 text-sm font-semibold text-[#0B1220]">Logistic Regression v3</p>
-                </div>
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#8A9AAF]">Input</p>
-                  <p className="mt-1 text-sm font-semibold text-[#0B1220]">Point-in-time features</p>
-                </div>
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#8A9AAF]">Prediction date</p>
-                  <p className="mt-1 font-mono text-sm text-[#0B1220]">{priceHistory?.prediction_date || predictedEvent?.prediction_date || '—'}</p>
-                </div>
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#8A9AAF]">Output</p>
-                  <p className="mt-1 font-mono text-sm font-semibold text-[#B85C00]">{formatProbabilityPct(prediction.probability)}</p>
-                </div>
-              </div>
-              <p className="mt-3 text-xs text-[#64748B]">Target: recovery to baseline during the 180 days after quarter-end.</p>
-            </div>
             <EditorialIntro prediction={prediction} predictedEvent={predictedEvent} actualStatus={actualStatus} isMatch={isMatch} />
             <EditorialRecoveryFigure priceHistory={priceHistory} prediction={prediction} predictedEvent={predictedEvent} actualStatus={actualStatus} isMatch={isMatch} />
             <SectionRule />
