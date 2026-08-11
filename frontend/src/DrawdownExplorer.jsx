@@ -953,8 +953,9 @@ function DrawdownExplorer({
     };
 
     try {
-      const response =
-        await fetch(
+      const [response] =
+        await Promise.all([
+          fetch(
           `${API_URL}/api/predict`,
           {
             method: 'POST',
@@ -964,7 +965,9 @@ function DrawdownExplorer({
                 body
               ),
           }
-        );
+          ),
+          new Promise(resolve => window.setTimeout(resolve, 900)),
+        ]);
 
       if (!response.ok) {
         setPredictError(
@@ -979,6 +982,16 @@ function DrawdownExplorer({
 
       setPrediction(
         data
+      );
+
+    } catch (err) {
+      console.error(
+        'Unable to run recovery model',
+        err
+      );
+
+      setPredictError(
+        'Could not generate a prediction for this event.'
       );
 
     } finally {
@@ -1050,10 +1063,6 @@ function DrawdownExplorer({
           eventData.id
         );
 
-        await runPredictionForEvent(
-          eventData.id
-        );
-
         if (!cancelled) {
           clearInitialEvent?.();
         }
@@ -1080,7 +1089,6 @@ function DrawdownExplorer({
       cancelled = true;
     };
 
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     initialEventId,
     token,
@@ -1149,11 +1157,11 @@ function DrawdownExplorer({
             <div>
 
               <p className="text-sm font-semibold text-[#0B1220]">
-                Preparing prediction
+                Loading selected event
               </p>
 
               <p className="mt-1 text-sm text-[#64748B]">
-                Loading the selected drawdown and running the recovery model.
+                Preparing the point-in-time event details. Model v3 has not been run yet.
               </p>
 
             </div>
@@ -1258,18 +1266,39 @@ function DrawdownExplorer({
                     <div className="flex items-center gap-3">
                       <CompanyLogo symbol={selectedEvent.ticker} size={38} />
                       <div>
-                        <p className="text-xs font-medium text-[#8A9AAF]">Selected event</p>
+                        <p className="text-xs font-semibold text-[#52637A]">Selected drawdown event</p>
                         <p className="mt-0.5 text-sm font-semibold text-[#0B1220]">
-                          {selectedEvent.ticker} · {selectedEvent.drop_quarter} ·{' '}
+                          {selectedEvent.ticker}{selectedEvent.company ? ` · ${selectedEvent.company}` : ''}
+                        </p>
+                        <p className="mt-1 font-mono text-xs text-[#64748B]">
+                          Drop quarter {selectedEvent.drop_quarter} ·{' '}
                           <span className="font-mono text-[#B4232C]">{formatPct(selectedEvent.event_max_drawdown_pct ?? selectedEvent.drop_pct)}</span>
+                        </p>
+                        <p className="mt-2 max-w-xl text-xs leading-5 text-[#64748B]">
+                          Ready for Model v3 scoring using only features available at the completed-quarter prediction date.
                         </p>
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
                       {predictError && <p className="text-xs text-[#B91C1C]">{predictError}</p>}
-                      <Button onClick={handlePredict} disabled={predictLoading} className={`${buttonPrimary} h-12 rounded-xl px-8`}>
-                        {predictLoading ? 'Predicting...' : 'Predict recovery'}
-                      </Button>
+                      {predictLoading ? (
+                        <div className="min-w-[260px] rounded-xl border border-[#D6E2EC] bg-white px-4 py-3 shadow-sm" role="status" aria-live="polite">
+                          <div className="flex items-center gap-2">
+                            <div className="h-4 w-4 animate-spin rounded-full border-2 border-[#BFD2E3] border-t-[#C96A12]" />
+                            <p className="text-sm font-semibold text-[#0B1220]">Running Model v3</p>
+                          </div>
+                          <div className="mt-2 grid gap-1 font-mono text-[11px] text-[#64748B]">
+                            <span>✓ Event selected</span>
+                            <span>Preparing point-in-time features…</span>
+                            <span>Applying training-time imputation…</span>
+                            <span className="text-[#B85C00]">Scoring 180-day recovery probability…</span>
+                          </div>
+                        </div>
+                      ) : (
+                        <Button onClick={handlePredict} className={`${buttonPrimary} h-12 rounded-xl px-8`}>
+                          Run recovery model
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1286,6 +1315,31 @@ function DrawdownExplorer({
           className="mt-2 scroll-mt-24 rounded-lg bg-white px-6 py-10 animate-[fadeIn_220ms_ease-out] sm:px-10 sm:py-12"
         >
           <div className="mx-auto max-w-none">
+            <div className="mb-8 border-y border-[#DDE7F0] py-4">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#8A9AAF]">Model run</p>
+                  <p className="mt-1 text-sm font-semibold text-[#047857]">Completed</p>
+                </div>
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#8A9AAF]">Model</p>
+                  <p className="mt-1 text-sm font-semibold text-[#0B1220]">Logistic Regression v3</p>
+                </div>
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#8A9AAF]">Input</p>
+                  <p className="mt-1 text-sm font-semibold text-[#0B1220]">Point-in-time features</p>
+                </div>
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#8A9AAF]">Prediction date</p>
+                  <p className="mt-1 font-mono text-sm text-[#0B1220]">{priceHistory?.prediction_date || predictedEvent?.prediction_date || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#8A9AAF]">Output</p>
+                  <p className="mt-1 font-mono text-sm font-semibold text-[#B85C00]">{formatProbabilityPct(prediction.probability)}</p>
+                </div>
+              </div>
+              <p className="mt-3 text-xs text-[#64748B]">Target: recovery to baseline during the 180 days after quarter-end.</p>
+            </div>
             <EditorialIntro prediction={prediction} predictedEvent={predictedEvent} actualStatus={actualStatus} isMatch={isMatch} />
             <EditorialRecoveryFigure priceHistory={priceHistory} prediction={prediction} predictedEvent={predictedEvent} actualStatus={actualStatus} isMatch={isMatch} />
             <SectionRule />
