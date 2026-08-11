@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
 @import "tailwindcss";
 @import "tw-animate-css";
@@ -8,8 +8,13 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  font-family: "Inter", system-ui, sans-serif;
+  font-family: 'Geist Variable', system-ui, sans-serif;
   background: #F5F8FB;
+  --font-ui: 'Geist Variable', system-ui, sans-serif;
+  --font-data: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --space-section-sm: 1.5rem;
+  --space-section-md: 2rem;
+  --space-section-lg: 3rem;
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
@@ -45,11 +50,11 @@
 }
 
 .font-serif {
-  font-family: 'Geist Variable', sans-serif;
+  font-family: var(--font-ui);
 }
 
 .font-mono {
-  font-family: "JetBrains Mono", monospace;
+  font-family: var(--font-data);
 }
 @keyframes fadeIn {
   from {
@@ -64,7 +69,7 @@
 
 @theme inline {
   --font-heading: var(--font-sans);
-  --font-sans: 'Geist Variable', sans-serif;
+  --font-sans: var(--font-ui);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -148,5 +153,73 @@
   }
   html {
     @apply font-sans;
+  }
+}
+
+@layer components {
+  .section-space-sm {
+    padding-block: var(--space-section-sm);
+  }
+
+  .section-space-md {
+    padding-block: var(--space-section-md);
+  }
+
+  .section-space-lg {
+    padding-block: var(--space-section-lg);
+  }
+
+  .type-page-title {
+    font-size: clamp(2rem, 3vw, 2.5rem);
+    font-weight: 700;
+    line-height: 1.08;
+    letter-spacing: -0.035em;
+  }
+
+  .type-section-title {
+    font-size: 1.375rem;
+    font-weight: 650;
+    line-height: 1.25;
+    letter-spacing: -0.025em;
+  }
+
+  .type-subsection-title {
+    font-size: 1.125rem;
+    font-weight: 650;
+    line-height: 1.35;
+    letter-spacing: -0.015em;
+  }
+
+  .type-card-title {
+    font-size: 1rem;
+    font-weight: 650;
+    line-height: 1.4;
+  }
+
+  .type-lead {
+    font-size: 1.375rem;
+    font-weight: 500;
+    line-height: 1.4;
+    letter-spacing: -0.015em;
+  }
+
+  .type-body {
+    font-size: 0.9375rem;
+    line-height: 1.75;
+  }
+
+  .type-label {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    line-height: 1.4;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+
+  .type-metric {
+    font-size: 1.5rem;
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: -0.025em;
   }
 }

@@ -280,13 +280,11 @@ def select_oof_threshold(y_true, probability):
     return best_threshold, best_score
 
 
-def restore_incumbent_v3(raw_df, output_path='ml/recovery_model.pkl'):
-    """Rebuild the frozen pre-experiment incumbent without market features."""
-    train_raw, validation_raw, test_raw = time_based_split_raw(raw_df)
+def train_active_v3(raw_df, output_path='ml/recovery_model.pkl', verbose=False):
+    """Train and save the active Logistic Regression v3 classifier."""
+    train_raw, _validation_raw, test_raw = time_based_split_raw(raw_df)
     train, medians = prepare_features(train_raw)
-    validation, _ = prepare_features(validation_raw, medians=medians)
     test, _ = prepare_features(test_raw, medians=medians)
-    validation = validation.reindex(columns=train.columns, fill_value=0)
     test = test.reindex(columns=train.columns, fill_value=0)
     excluded = MARKET_REGIME_COLS | {f'{column}_missing' for column in MARKET_REGIME_COLS}
     feature_columns = [
@@ -299,6 +297,16 @@ def restore_incumbent_v3(raw_df, output_path='ml/recovery_model.pkl'):
         X_train, y_train, X_test, c=0.5, class_weight='balanced'
     )
     prediction = probability >= 0.5
+
+    if verbose:
+        print(f"Training events: {len(X_train)}")
+        print(f"Final holdout events: {len(X_test)}")
+        evaluate_majority_baseline(y_test)
+        evaluate_model("Logistic Regression v3", y_test, probability, threshold=0.5)
+        show_logistic_coefficients(model, X_train)
+        print("\nFinal holdout probability buckets:")
+        show_probability_buckets(y_test, probability)
+
     artifact = {
         'model': model,
         'feature_columns': feature_columns,
@@ -471,72 +479,10 @@ def evaluate_majority_baseline(y_test):
 if __name__ == "__main__":
     raw_df = load_training_data()
     print(f"Loaded {len(raw_df)} events")
-    development_raw, holdout_raw, holdout_start = final_holdout_split_raw(raw_df)
-    print(f"Frozen holdout begins: {holdout_start.date()}")
-    print(f"Development: {len(development_raw)} events")
-    print(f"Final holdout: {len(holdout_raw)} events")
-
-    selected = evaluate_candidates_walk_forward(development_raw)
-    selected_threshold, oof_balanced_accuracy = select_oof_threshold(
-        selected['oof_y'], selected['oof_proba']
-    )
+    print("Training active Logistic Regression v3 (C=0.5, balanced classes, threshold=0.50)")
+    artifact = train_active_v3(raw_df, verbose=True)
     print(
-        f"Selected by {selected['folds']}-fold mean PR AUC: {selected['candidate']}\n"
-        f"Walk-forward PR AUC={selected['mean_pr_auc']:.3f}, "
-        f"ROC AUC={selected['mean_roc_auc']:.3f}, "
-        f"OOF threshold={selected_threshold:.2f}, "
-        f"balanced accuracy={oof_balanced_accuracy:.3f}"
+        "\nSaved active model to ml/recovery_model.pkl "
+        f"(version={artifact['model_version']}, ROC AUC={artifact['metrics']['test_auc']:.4f}, "
+        f"PR AUC={artifact['metrics']['test_average_precision']:.4f})"
     )
-
-    development, medians = prepare_features(development_raw)
-    holdout, _ = prepare_features(holdout_raw, medians=medians)
-    holdout = holdout.reindex(columns=development.columns, fill_value=0)
-    feature_columns = [c for c in development.columns if c not in NON_FEATURE_COLS]
-    X_development = development[feature_columns]
-    y_development = development['fast_recovery']
-    X_holdout = holdout[feature_columns]
-    y_holdout = holdout['fast_recovery']
-
-    model = build_candidate_model(selected['candidate'])
-    model.fit(X_development, y_development)
-    holdout_probability = model.predict_proba(X_holdout)[:, 1]
-    holdout_prediction = (holdout_probability >= selected_threshold).astype(int)
-
-    evaluate_majority_baseline(y_holdout)
-    evaluate_model(
-        f"Final {selected['candidate']['kind']}",
-        y_holdout,
-        holdout_probability,
-        selected_threshold,
-    )
-
-    metrics = {
-        'test_auc': round(roc_auc_score(y_holdout, holdout_probability), 4),
-        'test_average_precision': round(average_precision_score(y_holdout, holdout_probability), 4),
-        'test_accuracy': round(accuracy_score(y_holdout, holdout_prediction), 4),
-        'test_balanced_accuracy': round(balanced_accuracy_score(y_holdout, holdout_prediction), 4),
-        'test_f1': round(f1_score(y_holdout, holdout_prediction), 4),
-        'test_precision': round(precision_score(y_holdout, holdout_prediction, zero_division=0), 4),
-        'test_recall': round(recall_score(y_holdout, holdout_prediction, zero_division=0), 4),
-        'baseline_accuracy': round(accuracy_score(y_holdout, pd.Series(0, index=y_holdout.index)), 4),
-        'walk_forward_pr_auc': round(selected['mean_pr_auc'], 4),
-        'walk_forward_roc_auc': round(selected['mean_roc_auc'], 4),
-        'walk_forward_folds': selected['folds'],
-        'selected_candidate': selected['candidate'],
-        'training_events': len(X_development),
-        'test_events': len(X_holdout),
-        'holdout_start': str(holdout_start.date()),
-    }
-
-    joblib.dump({
-        'model': model,
-        'feature_columns': feature_columns,
-        'medians': medians,
-        'threshold': selected_threshold,
-        'model_name': selected['candidate']['kind'],
-        'model_version': 'v4',
-        'metrics': metrics,
-    }, 'ml/recovery_model_v4_experiment.pkl')
-
-    print("\nFinal holdout probability buckets:")
-    show_probability_buckets(y_holdout, holdout_probability)

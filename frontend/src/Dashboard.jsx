@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
+import { formatProbabilityPct } from '@/lib/formatters';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import CompanyLogo from '@/components/CompanyLogo';
 import {
   Tooltip,
   TooltipContent,
@@ -13,11 +14,8 @@ import {
   TrendingUp,
   Search,
   Target,
-  ArrowDown,
-  ArrowUp,
-  Minus
 } from 'lucide-react';
-import { TickerIcon, TickerSymbol, TickerPriceChange } from '@/components/kibo-ui/ticker/index';
+import { TickerSymbol, TickerPriceChange } from '@/components/kibo-ui/ticker/index';
 import { LineChart as RechartsLineChart, Line, YAxis, ResponsiveContainer } from 'recharts';
 
 const API_URL = import.meta.env.VITE_API_URL;
@@ -35,7 +33,7 @@ const CURATED_EVENT_IDS = [
 */
 const card = "rounded-2xl border border-[#DDE7F0] bg-white shadow-sm";
 const cardPad = "p-5";
-const label = "text-[11px] font-semibold uppercase tracking-[0.16em] text-[#64748B]";
+const label = "type-label text-[#64748B]";
 const buttonPrimary =
   "cursor-pointer rounded-xl bg-[#12355B] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[#082F49] active:scale-[0.98]";
 const statIconWrap =
@@ -74,10 +72,6 @@ function getMatchStatus(pred) {
 function getRandomEventIds(pool, count = 4) {
   const shuffled = [...pool].sort(() => Math.random() - 0.5);
   return shuffled.slice(0, count);
-}
-
-function logoUrl(ticker, size = 52) {
-  return `https://img.logo.dev/ticker/${ticker}?token=${import.meta.env.VITE_LOGO_DEV_TOKEN}&size=${size}&retina=true`;
 }
 
 function EventSparkline({ prices }) {
@@ -128,16 +122,8 @@ function SuggestedEventCard({ event, onSelect, actionLabel = "Open recovery path
 
   return (
     <button onClick={() => onSelect(event.id)} className={eventCard}>
-      <div className="flex items-center gap-2">
-        <TickerIcon asChild>
-          <img
-            src={logoUrl(event.ticker)}
-            alt={`${event.ticker} logo`}
-            width={24}
-            height={24}
-            className="rounded-full"
-          />
-        </TickerIcon>
+      <div className="flex items-center gap-3">
+        <CompanyLogo symbol={event.ticker} size={30} />
         <div>
           <TickerSymbol symbol={event.ticker} className="text-sm text-[#0B1220]" />
           <div className="mt-0.5 text-xs font-medium text-[#64748B] whitespace-nowrap">
@@ -173,81 +159,68 @@ function SuggestedEventCard({ event, onSelect, actionLabel = "Open recovery path
   );
 }
 
-function DrawdownRecoverySketch() {
+function MethodologyDiagram({ steps }) {
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-[#DDE7F0] bg-white/75 px-4 py-5 shadow-sm">
-      <div className="mb-3 flex items-center justify-between">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#64748B]">
-            Event shape
-          </p>
-          <p className="mt-1 text-xs font-semibold text-[#0B1220]">
-            Baseline → trough → recovery
-          </p>
+    <div className="overflow-x-auto py-4">
+      <div className="min-w-[760px]">
+        <div className="mb-4 flex items-center justify-between gap-6">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#8A9AAF]">One example event, illustrated</p>
+          <div className="flex items-center gap-5 text-xs text-[#8A9AAF]">
+            <span className="flex items-center gap-2"><i className="h-0.5 w-4 bg-[#B91C1C]" />Price</span>
+            <span className="flex items-center gap-2"><i className="w-4 border-t border-dashed border-[#94A3B8]" />Baseline</span>
+          </div>
         </div>
 
-        <Badge className="rounded-full bg-[#E8F1F8] px-2.5 py-1 text-[11px] font-semibold text-[#12355B] hover:bg-[#E8F1F8]">
-          SQL-defined
-        </Badge>
+        <svg viewBox="0 0 1000 250" className="h-auto w-full" role="img" aria-label="Baseline, event low, quarter-end prediction date, and forward recovery path">
+          <defs>
+            <linearGradient id="methodologyDrawdownFill" x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0%" stopColor="#F5DCDD" stopOpacity="0.75" />
+              <stop offset="100%" stopColor="#F5DCDD" stopOpacity="0.18" />
+            </linearGradient>
+          </defs>
+
+          <line x1="42" y1="46" x2="958" y2="46" stroke="#AEBECD" strokeDasharray="4 5" strokeWidth="1.5" />
+          <path d="M42 46 C145 78 230 142 310 162 C390 110 470 128 575 122 C675 148 760 198 855 202 C895 151 930 88 958 46 L958 46 L42 46 Z" fill="url(#methodologyDrawdownFill)" />
+          <path d="M42 46 C145 78 230 142 310 162 C390 110 470 128 575 122 C675 148 760 198 855 202 C895 151 930 88 958 46" fill="none" stroke="#B91C1C" strokeWidth="3" />
+
+          <line x1="590" y1="20" x2="590" y2="205" stroke="#F0A024" strokeDasharray="4 5" strokeWidth="1.5" />
+          <circle cx="42" cy="46" r="7" fill="white" stroke="#12355B" strokeWidth="3" />
+          <circle cx="310" cy="162" r="7" fill="white" stroke="#B91C1C" strokeWidth="3" />
+          <circle cx="590" cy="122" r="7" fill="white" stroke="#F0A024" strokeWidth="3" />
+          <circle cx="958" cy="46" r="7" fill="white" stroke="#05664F" strokeWidth="3" />
+
+          <text x="42" y="28" fill="#12355B" fontSize="12" fontFamily="JetBrains Mono, monospace">Baseline</text>
+          <text x="958" y="28" textAnchor="end" fill="#05664F" fontSize="12" fontFamily="JetBrains Mono, monospace">Recovery</text>
+          <text x="310" y="190" textAnchor="middle" fill="#B91C1C" fontSize="12" fontFamily="JetBrains Mono, monospace">Event low</text>
+          <text x="310" y="208" textAnchor="middle" fill="#D16767" fontSize="11" fontFamily="JetBrains Mono, monospace">−18% vs. baseline</text>
+          <text x="590" y="103" textAnchor="middle" fill="#B45309" fontSize="12" fontFamily="JetBrains Mono, monospace">Prediction date</text>
+
+          <line x1="42" y1="225" x2="958" y2="225" stroke="#D4DEE8" strokeWidth="1.5" />
+          <text x="42" y="244" fill="#A5B4C5" fontSize="11" fontFamily="JetBrains Mono, monospace">quarter starts</text>
+          <text x="958" y="244" textAnchor="end" fill="#A5B4C5" fontSize="11" fontFamily="JetBrains Mono, monospace">180 days later</text>
+        </svg>
+
+        <div className="relative mt-6 h-5 border-t-2 border-[#D4DEE8]">
+          {[[3.5, '#12355B'], [30, '#C52228'], [59.2, '#F0A024'], [97, '#05664F']].map(([left, color]) => (
+            <span key={left} className="absolute top-0 h-3.5 w-3.5 -translate-x-1/2 -translate-y-[8px] rounded-full" style={{ left: `${left}%`, backgroundColor: color }} />
+          ))}
+        </div>
+
+        <div className="grid grid-cols-4 gap-7">
+          {steps.map(([title, kicker, body]) => (
+            <div key={title} className="border-l border-[#D7E1EA] pl-4">
+              <h3 className="type-card-title text-[#0B1220]">{title}</h3>
+              <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#8A9AAF]">{kicker}</p>
+              <p className="mt-2 text-sm leading-6 text-[#52637A]">{body}</p>
+            </div>
+          ))}
+        </div>
       </div>
-
-      <svg
-        viewBox="0 0 360 180"
-        role="img"
-        aria-label="Drawdown recovery sketch"
-        className="h-32 w-full md:h-36"
-      >
-        <defs>
-          <linearGradient id="drawdownFill" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%" stopColor="#E8F1F8" stopOpacity="0.95" />
-            <stop offset="100%" stopColor="#E8F1F8" stopOpacity="0.15" />
-          </linearGradient>
-        </defs>
-
-        <line
-          x1="24"
-          y1="48"
-          x2="336"
-          y2="48"
-          stroke="#BFD2E3"
-          strokeDasharray="6 6"
-          strokeWidth="2"
-        />
-        <text x="24" y="34" fill="#64748B" fontSize="11" fontWeight="600">
-          Baseline
-        </text>
-
-        <path
-          d="M 24 52 C 76 48, 104 62, 128 88 C 150 112, 178 136, 206 132 C 248 126, 272 82, 336 50"
-          fill="none"
-          stroke="#12355B"
-          strokeWidth="4"
-          strokeLinecap="round"
-        />
-
-        <path
-          d="M 24 52 C 76 48, 104 62, 128 88 C 150 112, 178 136, 206 132 C 248 126, 272 82, 336 50 L 336 160 L 24 160 Z"
-          fill="url(#drawdownFill)"
-        />
-
-        <circle cx="206" cy="132" r="6" fill="#B91C1C" />
-        <circle cx="336" cy="50" r="5" fill="#047857" />
-
-        <text x="184" y="154" fill="#B91C1C" fontSize="11" fontWeight="700">
-          Trough
-        </text>
-        <text x="270" y="38" fill="#047857" fontSize="11" fontWeight="700">
-          Recovery date
-        </text>
-
-        <line x1="206" y1="132" x2="206" y2="48" stroke="#DDE7F0" strokeDasharray="4 5" />
-        <line x1="336" y1="50" x2="336" y2="48" stroke="#DDE7F0" strokeDasharray="4 5" />
-      </svg>
     </div>
   );
 }
 
-function Dashboard({ token, onSignIn, onRegister, onGoToPredict }) {
+function Dashboard({ token, onSignIn, onRegister, onGoToPredict, onGoToHistory, onGoToModelAnalysis }) {
   const [history, setHistory] = useState([]);
   const [modelInfo, setModelInfo] = useState(null);
   const [suggested, setSuggested] = useState([]);
@@ -338,10 +311,7 @@ function Dashboard({ token, onSignIn, onRegister, onGoToPredict }) {
 
             setHistory(rawHistory.slice(0, 5).map(pred => ({
               ...pred,
-              actualOutcome:
-                pred.days_to_recovery == null
-                  ? null
-                  : pred.days_to_recovery <= 180,
+              actualOutcome: pred.actual_fast_recovery ?? null,
             })));
           } catch (error) {
             console.error('Unable to load dashboard history', error);
@@ -390,7 +360,7 @@ function Dashboard({ token, onSignIn, onRegister, onGoToPredict }) {
   if (!token) {
     const researchMetrics = [
       ['1,894', 'raw drawdown events', 'Generated from 1.3M+ yfinance daily price rows across 11 years of S&P 500 history.'],
-      ['1,775', 'scored model events', 'Final 10-year modeling dataset used for train, validation, and holdout testing.'],
+      ['1,610', 'clean classifier events', 'Model v3 events with a complete point-in-time feature row and a fully observed 180-day forward label.'],
       ['476', 'stocks represented', 'Distinct S&P 500 tickers with qualifying drawdown events in the modeling window.'],
       [modelInfo?.metrics?.test_auc != null ? modelInfo.metrics.test_auc.toFixed(3) : '—', 'holdout ROC AUC', 'Model ranking performance on the chronological holdout test set.'],
     ];
@@ -399,44 +369,36 @@ function Dashboard({ token, onSignIn, onRegister, onGoToPredict }) {
       [
         'Baseline',
         'Reference price',
-        'A qualifying quarterly drop of 15% or more sets the quarter-start adjusted close as the recovery reference point.',
-        <Minus className="h-5 w-5" />,
-        "bg-[#E8F1F8] text-[#0B4F7A]",
+        'Quarter-start adjusted close.',
       ],
       [
-        'Trough',
         'Event low',
-        'Lowest adjusted close during the drawdown quarter defines the event low.',
-        <ArrowDown className="h-5 w-5" />,
-        "bg-[#FEE2E2] text-[#B91C1C]",
+        'Quarter low',
+        'Lowest adjusted close during the drawdown quarter.',
       ],
       [
-        'Recovery',
-        'Recovery date',
-        'First future date where price returns to baseline determines days-to-recovery.',
-        <ArrowUp className="h-5 w-5" />,
-        "bg-[#DDF7EC] text-[#047857]",
+        'Prediction date',
+        'Quarter-end cutoff',
+        'Only information available by this date is used.',
+      ],
+      [
+        'Forward recovery',
+        '180-day label',
+        'Positive label if price returns to baseline within the next 180 days.',
       ],
     ];
 
     return (
       <div className="mx-auto max-w-5xl text-[#0B1220]">
-        <section className="mb-6 grid grid-cols-1 items-center gap-6 py-1 lg:grid-cols-[minmax(0,1fr)_360px]">
-          <div className="max-w-3xl">
+        <section className="mb-8 grid gap-7 py-1 lg:grid-cols-[1.05fr_0.95fr] lg:items-start lg:gap-12">
+          <div>
             <p className={`mb-3 ${label}`}>
               DrawdownIQ Research
             </p>
 
-            <h1 className="text-4xl font-bold leading-[1.05] tracking-tight text-[#0B1220] md:text-[40px]">
-              S&amp;P 500 drawdown
-              recovery analysis
+            <h1 className="type-page-title text-[#0B1220]">
+              S&amp;P 500 180-day forward recovery analysis
             </h1>
-
-            <p className="mt-3 max-w-2xl text-sm leading-7 text-[#52637A]">
-              An end-to-end market data project that converts daily prices into
-              SQL-defined drawdown events, measures recovery paths, and tests whether point-in-time
-              features can rank faster recoveries.
-            </p>
 
             <div className="mt-5 flex flex-wrap gap-3">
               <Button
@@ -448,7 +410,7 @@ function Dashboard({ token, onSignIn, onRegister, onGoToPredict }) {
 
               <Button
                 variant="outline"
-                onClick={() => document.getElementById('methodology')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                onClick={onGoToModelAnalysis}
                 className="h-9 cursor-pointer rounded-xl border-[#DDE7F0] bg-white px-4 text-sm font-semibold text-[#12355B] hover:bg-[#F8FBFF] hover:text-[#082F49]"
               >
                 Model analysis
@@ -456,49 +418,41 @@ function Dashboard({ token, onSignIn, onRegister, onGoToPredict }) {
             </div>
           </div>
 
-          <DrawdownRecoverySketch />
+          <div className="lg:pt-12">
+            <p className="type-body text-[#52637A]">
+              DrawdownIQ studies major quarterly selloffs among current S&amp;P 500 constituents and estimates whether stocks still below baseline at quarter-end recover during the next 180 days.
+            </p>
+            <p className="type-body mt-2 text-[#64748B]">
+              The project combines SQL event construction, point-in-time feature engineering, leakage-audited model evaluation, and a React dashboard for exploring historical recovery cases.
+            </p>
+
+          </div>
+
         </section>
 
         <section id="methodology" className="mb-8 border-t border-[#DDE7F0] pt-8 scroll-mt-6">
           <div className="mb-3">
-            <h2 className="text-lg font-semibold tracking-tight text-[#0B1220]">
+            <h2 className="type-subsection-title text-[#0B1220]">
               Event methodology
             </h2>
           </div>
 
-          <p className="mb-6 max-w-3xl text-sm leading-6 text-[#64748B]">
-            Each event is built from a defined baseline, observed trough, and measured recovery date.
+          <p className="type-body mb-6 max-w-3xl text-[#64748B]">
+            Each event starts with a quarter-start baseline, tracks the deepest price decline during the quarter, and uses the completed-quarter date as the model&apos;s prediction cutoff.
           </p>
 
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-            {methodologySteps.map(([title, kicker, body, icon, iconStyle], index) => (
-              <div
-                key={title}
-                className={index === 0 ? "flex gap-4" : "flex gap-4 md:border-l md:border-[#DDE7F0] md:pl-6"}
-              >
-                <div className={`mt-0.5 flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-2xl ${iconStyle}`}>
-                  {icon}
-                </div>
-
-                <div>
-                  <p className={label}>{kicker}</p>
-                  <h3 className="mt-2 text-base font-semibold text-[#0B1220]">{title}</h3>
-                  <p className="mt-2 text-sm leading-6 text-[#52637A]">{body}</p>
-                </div>
-              </div>
-            ))}
-          </div>
+          <MethodologyDiagram steps={methodologySteps} />
         </section>
 
         <TooltipProvider delayDuration={150}>
           <section className="mb-8 border-t border-[#DDE7F0] pt-8">
             <div className="mb-5 flex items-start justify-between gap-6">
               <div>
-                <h2 className="text-lg font-semibold tracking-tight text-[#0B1220]">
+                <h2 className="type-subsection-title text-[#0B1220]">
                   Research dataset
                 </h2>
-                <p className="mt-1 max-w-3xl text-sm leading-6 text-[#64748B]">
-                  Built from 1.3M+ daily price rows retrieved through yfinance and reduced into SQL-defined recovery events.
+                <p className="type-body mt-1 max-w-3xl text-[#64748B]">
+                  Built from 1.3M+ daily price rows retrieved through yfinance and reduced into SQL-defined quarterly drawdown events with quarter-end prediction cutoffs.
                 </p>
               </div>
 
@@ -513,7 +467,7 @@ function Dashboard({ token, onSignIn, onRegister, onGoToPredict }) {
                   key={name}
                   className={index === 0 ? '' : 'border-l border-[#DDE7F0] pl-5'}
                 >
-                  <div className="font-mono text-[28px] font-semibold leading-none tracking-tight text-[#0B1220]">
+                  <div className="type-metric font-mono text-[#0B1220]">
                     {value}
                   </div>
 
@@ -540,13 +494,17 @@ function Dashboard({ token, onSignIn, onRegister, onGoToPredict }) {
                 </div>
               ))}
             </div>
+
+            <p className="mt-6 border-l-2 border-[#F0A024] pl-4 text-xs leading-5 text-[#7A6A52]">
+              <span className="font-semibold text-[#9A5B0A]">Scope note:</span> this study uses today&apos;s S&amp;P 500 constituents and current sector mappings, so it is not a survivorship-bias-free historical index backtest.
+            </p>
           </section>
         </TooltipProvider>
 
         <section className="mb-8 border-t border-[#DDE7F0] pt-8">
           <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h2 className="text-lg font-semibold tracking-tight text-[#0B1220]">
+              <h2 className="type-subsection-title text-[#0B1220]">
                 Sample recovery cases
               </h2>
               <p className="mt-1 text-xs text-[#64748B]">
@@ -604,7 +562,7 @@ function Dashboard({ token, onSignIn, onRegister, onGoToPredict }) {
           <p className={`mb-2 ${label}`}>
             Recovery model workspace
           </p>
-          <h1 className="text-2xl font-semibold tracking-tight text-[#0B1220]">
+          <h1 className="type-page-title text-[#0B1220]">
             Welcome back
           </h1>
           <p className="mt-1 max-w-2xl text-sm leading-6 text-[#64748B]">
@@ -632,7 +590,7 @@ function Dashboard({ token, onSignIn, onRegister, onGoToPredict }) {
         <StatCard
           icon={<Target className="h-5 w-5" />}
           value={highLikelihoodCount}
-          label={`High-likelihood event${highLikelihoodCount === 1 ? '' : 's'}`}
+          label={`Event${highLikelihoodCount === 1 ? '' : 's'} at or above 60%`}
         />
       </section>
 
@@ -644,15 +602,7 @@ function Dashboard({ token, onSignIn, onRegister, onGoToPredict }) {
 
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 {lastPrediction.ticker && (
-                  <TickerIcon asChild>
-                    <img
-                      src={logoUrl(lastPrediction.ticker, 80)}
-                      alt={`${lastPrediction.ticker} logo`}
-                      width={40}
-                      height={40}
-                      className="rounded-full"
-                    />
-                  </TickerIcon>
+                  <CompanyLogo symbol={lastPrediction.ticker} size={44} />
                 )}
 
                 <span className="font-mono text-xl font-semibold text-[#0B1220]">
@@ -666,7 +616,7 @@ function Dashboard({ token, onSignIn, onRegister, onGoToPredict }) {
                 )}
 
                 <span className={badgeNeutral}>
-                  {(lastPrediction.predicted_probability * 100).toFixed(1)}%
+                  {formatProbabilityPct(lastPrediction.predicted_probability)}
                 </span>
 
                 {getMatchStatus(lastPrediction) != null && (
@@ -677,7 +627,7 @@ function Dashboard({ token, onSignIn, onRegister, onGoToPredict }) {
               </div>
 
               <p className="mt-1.5 text-sm leading-6 text-[#64748B]">
-                Model estimated fast recovery probability for this historical drawdown event.
+                Model estimated the probability of recovery during the 180 days after the completed-quarter prediction date.
               </p>
             </div>
 
@@ -687,9 +637,11 @@ function Dashboard({ token, onSignIn, onRegister, onGoToPredict }) {
                   Actual recovery
                 </p>
                 <p className="mt-1 font-medium text-[#0B1220]">
-                  {lastPrediction.days_to_recovery == null
-                    ? 'Pending'
-                    : `${lastPrediction.days_to_recovery} days`}
+                  {lastPrediction.actual_status === 'not_recovered_within_180d'
+                    ? 'Not recovered within 180 days'
+                    : lastPrediction.days_to_recovery == null
+                      ? 'Evaluation window open'
+                    : `${lastPrediction.days_to_recovery} days after prediction date`}
                 </p>
               </div>
 
@@ -699,8 +651,8 @@ function Dashboard({ token, onSignIn, onRegister, onGoToPredict }) {
                 </p>
                 <p className="mt-1 font-medium text-[#0B1220]">
                   {(lastPrediction.predicted_fast_recovery ?? lastPrediction.predicted_probability >= 0.5)
-                    ? 'Fast recovery'
-                    : 'Not fast'}
+                    ? 'Recovery in next 180 days'
+                    : 'No recovery in next 180 days'}
                 </p>
               </div>
             </div>
@@ -712,7 +664,7 @@ function Dashboard({ token, onSignIn, onRegister, onGoToPredict }) {
         <section className="overflow-hidden rounded-2xl border border-[#DDE7F0] bg-white shadow-sm lg:col-span-3">
           <div className="flex items-center justify-between gap-4 border-b border-[#DDE7F0] px-5 py-5">
             <div>
-              <h2 className="text-lg font-semibold tracking-tight text-[#0B1220]">
+              <h2 className="type-subsection-title text-[#0B1220]">
                 Recent predictions
               </h2>
               <p className="mt-1 text-xs leading-5 text-[#64748B]">
@@ -720,8 +672,8 @@ function Dashboard({ token, onSignIn, onRegister, onGoToPredict }) {
               </p>
             </div>
             <button
-              onClick={() => onGoToPredict()}
-              className="cursor-pointer inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-sm font-semibold text-[#0B4F7A] transition-all duration-200 hover:-translate-y-0.5  hover:text-[#082F49]"
+              onClick={onGoToHistory}
+              className="group inline-flex cursor-pointer items-center gap-1 rounded-lg px-2.5 py-1 text-sm font-semibold text-[#0B4F7A] transition-all duration-200 hover:-translate-y-0.5 hover:text-[#082F49]"
             >
               View all <span className="inline-block transition-transform group-hover:translate-x-0.5">→</span>
             </button>
@@ -763,7 +715,7 @@ function Dashboard({ token, onSignIn, onRegister, onGoToPredict }) {
                       </span>
 
                       <span className="font-mono text-sm text-[#334155]">
-                        {(pred.predicted_probability * 100).toFixed(1)}%
+                        {formatProbabilityPct(pred.predicted_probability)}
                       </span>
 
                       <div className="text-right">
@@ -772,7 +724,7 @@ function Dashboard({ token, onSignIn, onRegister, onGoToPredict }) {
                             {isMatch ? 'Match' : 'Miss'}
                           </span>
                         ) : (
-                          <span className={badgeNeutral}>Pending</span>
+                          <span className={badgeNeutral}>Window open</span>
                         )}
                       </div>
                     </div>
@@ -787,7 +739,7 @@ function Dashboard({ token, onSignIn, onRegister, onGoToPredict }) {
           <div className="border-b border-[#DDE7F0] px-5 py-5">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h2 className="text-lg font-semibold tracking-tight text-[#0B1220]">
+                <h2 className="type-subsection-title text-[#0B1220]">
                   Model performance
                 </h2>
                 <p className="mt-1 text-xs leading-5 text-[#64748B]">
@@ -826,14 +778,14 @@ function Dashboard({ token, onSignIn, onRegister, onGoToPredict }) {
                   <div className="flex justify-between gap-4 text-sm">
                     <span className="text-[#64748B]">Decision threshold</span>
                     <span className="font-mono font-semibold text-[#0B1220]">
-                      50% cutoff · {modelVersion}
+                      {((modelInfo.threshold ?? 0.5) * 100).toFixed(0)}% cutoff · {modelVersion}
                     </span>
                   </div>
                 </div>
 
                 <div className="mt-4 space-y-3 border-t border-[#EEF2F6] pt-4">
                   <p className="text-xs leading-5 text-[#64748B]">
-                    Evaluated on 1,775 scored recovery events with the test period held out chronologically.
+                    Trained on {modelInfo.metrics.training_events?.toLocaleString() ?? '—'} events and evaluated on a chronological holdout of {modelInfo.metrics.test_events?.toLocaleString() ?? '—'} events.
                   </p>
                   <div className="mt-4 rounded-2xl border border-[#BFD2E3] bg-[#F8FBFF] px-3 py-2 text-xs leading-5 text-[#12355B]">
                     The model is best used as a recovery-ranking signal, not a guaranteed market forecast.
