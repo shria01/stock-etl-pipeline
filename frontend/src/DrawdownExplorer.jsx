@@ -415,13 +415,13 @@ function EditorialSectorContext({ prediction, sectorBenchmark }) {
           ? 'That closeness suggests the model was not identifying a large stock-specific divergence from the sector base rate. This is a useful check on how much the event differed from its peer group.'
           : `The ${Math.abs(delta).toFixed(1)} percentage-point gap shows that the event-specific model signal differed meaningfully from the sector base rate.`}
       </p>
-      <div className="relative mx-auto mt-7 h-[76px] w-full max-w-3xl px-2" aria-label={`Recovery probability axis from 0 to 100 percent. Sector recovery rate ${sectorValue} percent; model probability ${modelValue} percent`}>
+      <div className="relative mx-auto mt-7 h-24 w-full max-w-3xl px-2" aria-label={`Recovery probability axis from 0 to 100 percent. Sector recovery rate ${sectorValue} percent; model probability ${modelValue} percent`}>
         <div className="absolute left-2 right-2 top-6 h-[3px] rounded-full bg-[#B8C7D5]" />
         <div className="absolute left-2 top-[19px] h-4 w-[2px] bg-[#8A9AAF]" />
         <div className="absolute right-2 top-[19px] h-4 w-[2px] bg-[#8A9AAF]" />
         <span className="absolute left-2 top-11 font-mono text-[11px] text-[#64748B]">0%</span>
         <span className="absolute right-2 top-11 font-mono text-[11px] text-[#64748B]">100%</span>
-        <span className="absolute left-1/2 top-11 -translate-x-1/2 font-mono text-[10px] text-[#A0AEC0]">Recovery probability</span>
+        <span className="absolute left-1/2 top-[76px] -translate-x-1/2 whitespace-nowrap font-mono text-[10px] uppercase tracking-[0.12em] text-[#A0AEC0]">Recovery probability</span>
         <div className="absolute left-2 right-2 top-[19px] h-4">
           <div className="absolute -translate-x-1/2" style={{ left: `${modelPosition}%` }}>
             <div className="h-4 w-4 rounded-full border-[3px] border-white bg-[#C96A12] shadow-[0_2px_6px_rgba(15,35,60,0.22)]" />
