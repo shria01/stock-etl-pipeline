@@ -401,7 +401,7 @@ function Dashboard({ token, onSignIn, onRegister, onGoToPredict, onGoToHistory, 
 
           <div className="mt-8 grid gap-6 max-w-4xl">
             <p className="type-body text-[#52637A]">
-              DrawdownIQ studies major quarterly selloffs among current S&amp;P 500 constituents and estimates whether stocks still below baseline at quarter-end recover during the next 180 days. The project combines SQL event construction, point-in-time feature engineering, leakage-audited model evaluation, and a React dashboard for exploring historical recovery cases.
+              DrawdownIQ studies major quarterly selloffs among current S&amp;P 500 companies and estimates whether stocks still below baseline at quarter-end recover during the next 180 days. The project combines SQL event construction, point-in-time feature engineering, leakage-audited model evaluation, and a React dashboard for exploring historical recovery cases.
             </p>
 
           </div>
@@ -490,7 +490,7 @@ function Dashboard({ token, onSignIn, onRegister, onGoToPredict, onGoToHistory, 
             </div>
 
             <p className="mt-6 border-l-2 border-[#F0A024] pl-4 text-xs leading-5 text-[#7A6A52]">
-              <span className="font-semibold text-[#9A5B0A]">Scope note:</span> this study uses today&apos;s S&amp;P 500 constituents and current sector mappings, so it is not a survivorship-bias-free historical index backtest.
+              <span className="font-semibold text-[#9A5B0A]">Scope note:</span> this study uses today&apos;s S&amp;P 500 companies and current sector mappings, so it is not a survivorship-bias-free historical index backtest.
             </p>
           </section>
         </TooltipProvider>
