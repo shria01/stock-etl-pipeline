@@ -362,7 +362,7 @@ function Dashboard({ token, onSignIn, onRegister, onGoToPredict, onGoToHistory, 
       ['1,894', 'raw drawdown events', 'Generated from 1.3M+ yfinance daily price rows across 11 years of S&P 500 history.'],
       ['1,610', 'clean classifier events', 'Model v3 events with a complete point-in-time feature row and a fully observed 180-day forward label.'],
       ['476', 'stocks represented', 'Distinct S&P 500 tickers with qualifying drawdown events in the modeling window.'],
-      [modelInfo?.metrics?.test_auc != null ? modelInfo.metrics.test_auc.toFixed(3) : '—', 'holdout ROC AUC', 'Model ranking performance on the chronological holdout test set.'],
+      [modelInfo?.metrics?.test_auc != null ? modelInfo.metrics.test_auc.toFixed(3) : 'N/A', 'holdout ROC AUC', 'Model ranking performance on the chronological holdout test set.'],
     ];
 
     const methodologySteps = [
@@ -779,7 +779,7 @@ function Dashboard({ token, onSignIn, onRegister, onGoToPredict, onGoToHistory, 
 
                 <div className="mt-4 space-y-3 border-t border-[#EEF2F6] pt-4">
                   <p className="text-xs leading-5 text-[#64748B]">
-                    Trained on {modelInfo.metrics.training_events?.toLocaleString() ?? '—'} events and evaluated on a chronological holdout of {modelInfo.metrics.test_events?.toLocaleString() ?? '—'} events.
+                    Trained on {modelInfo.metrics.training_events?.toLocaleString() ?? 'N/A'} events and evaluated on a chronological holdout of {modelInfo.metrics.test_events?.toLocaleString() ?? 'N/A'} events.
                   </p>
                   <div className="mt-4 rounded-2xl border border-[#BFD2E3] bg-[#F8FBFF] px-3 py-2 text-xs leading-5 text-[#12355B]">
                     The model is best used as a recovery-ranking signal, not a guaranteed market forecast.

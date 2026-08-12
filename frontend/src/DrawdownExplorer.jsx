@@ -63,14 +63,14 @@ function evaluateRecoveryOutcome(priceHistory) {
 
 
 function formatPct(value, digits = 1) {
-  if (value == null || Number.isNaN(value)) return '—';
+  if (value == null || Number.isNaN(value)) return 'N/A';
 
   return `${(value * 100).toFixed(digits)}%`;
 }
 
 
 function formatBaselinePct(value, digits = 1) {
-  if (value == null || Number.isNaN(value)) return '—';
+  if (value == null || Number.isNaN(value)) return 'N/A';
 
   const prefix = value > 0 ? '+' : '';
 
@@ -79,7 +79,7 @@ function formatBaselinePct(value, digits = 1) {
 
 
 function formatQuarter(dateValue) {
-  if (!dateValue) return '—';
+  if (!dateValue) return 'N/A';
 
   const [year, month] = String(dateValue).split('-').map(Number);
   if (!year || !month) return dateValue;
@@ -182,11 +182,11 @@ function EditorialIntro({ prediction, predictedEvent, actualStatus, isMatch }) {
   const dropQuarter = predictedEvent?.drop_quarter;
   const wasFacebookTicker = ticker === 'META' && dropQuarter && dropQuarter < '2022-06-09';
   const dropPct = prediction?.event_max_drawdown_pct == null
-    ? '—'
+    ? 'N/A'
     : Math.abs(prediction.event_max_drawdown_pct * 100).toFixed(1);
   const probability = formatProbabilityPct(prediction?.probability);
   const threshold = prediction?.threshold == null
-    ? '—'
+    ? 'N/A'
     : (prediction.threshold * 100).toFixed(0);
   const days = predictedEvent?.days_to_recovery == null
     ? 'not observed'
@@ -412,7 +412,7 @@ function EditorialSectorContext({ prediction, sectorBenchmark }) {
         <span className={`font-semibold ${delta <= 0 ? 'text-[#12355B]' : 'text-[#C96A12]'}`}>{Math.abs(delta).toFixed(1)}pp {delta <= 0 ? 'below' : 'above'}</span>{' '}
         the <span className="font-semibold text-[#0B1220]">{sectorValue}%</span> historical rate of recovery during the 180 days after quarter-end for{' '}
         <span className="font-semibold text-[#0B1220]">{prediction.sector}</span> drawdowns. {Math.abs(delta) < 2
-          ? 'That closeness suggests the model was not identifying a large stock-specific divergence from the sector base rate—a useful check on how much this event differed from its peer group.'
+          ? 'That closeness suggests the model was not identifying a large stock-specific divergence from the sector base rate. This is a useful check on how much the event differed from its peer group.'
           : `The ${Math.abs(delta).toFixed(1)} percentage-point gap shows that the event-specific model signal differed meaningfully from the sector base rate.`}
       </p>
       <div className="relative mx-auto mt-7 h-[76px] w-full max-w-3xl px-2" aria-label={`Recovery probability axis from 0 to 100 percent. Sector recovery rate ${sectorValue} percent; model probability ${modelValue} percent`}>
@@ -469,7 +469,7 @@ function EditorialSurvivalSection({ prediction }) {
       <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#8A9AAF]">Recovery probability over time</p>
       <p className="mt-3 max-w-4xl text-[17px] leading-7 text-[#52637A]">
         Cumulative chance of recovery reaches{' '}
-        <span className="font-semibold text-[#0B1220]">{point180 ? formatProbabilityPct(point180.cumulative_recovery_probability) : '—'}</span>{' '}
+        <span className="font-semibold text-[#0B1220]">{point180 ? formatProbabilityPct(point180.cumulative_recovery_probability) : 'N/A'}</span>{' '}
         by the 180-day Model v3 horizon{point365 ? <> and <span className="font-semibold text-[#0B1220]">{formatProbabilityPct(point365.cumulative_recovery_probability)}</span> by 365 days, the outer edge of the research window</> : ''}.
       </p>
 

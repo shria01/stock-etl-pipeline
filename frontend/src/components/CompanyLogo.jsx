@@ -14,7 +14,7 @@ export default function CompanyLogo({ symbol, size = 28, className = '' }) {
   const canLoadLogo = Boolean(symbol && logoToken && failedSymbol !== symbol);
 
   // Request a fixed, higher-res source regardless of display size, and let
-  // CSS scale it down — avoids upscaling artifacts at small row sizes
+  // CSS scales it down to avoid upscaling artifacts at small row sizes.
   // (28-32px) where size * 2 was too low-res to look crisp.
   const requestSize = 128;
 

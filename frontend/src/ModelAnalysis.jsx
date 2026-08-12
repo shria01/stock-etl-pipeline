@@ -236,7 +236,7 @@ export default function ModelAnalysis() {
         <p className={sectionLabel}>Recovery research · production model v3</p>
         <h1 className="type-page-title mt-4">Model Analysis</h1>
         <p className="type-lead mt-5 max-w-4xl text-[#334155]">
-          <span className="font-mono">Logistic Regression v3</span> classifies whether an S&amp;P 500 stock recovers within 180 days of a completed 15%+ quarterly decline — trained to rank recovery likelihood, not predict price.
+          <span className="font-mono">Logistic Regression v3</span> classifies whether an S&amp;P 500 stock recovers within 180 days of a completed 15%+ quarterly decline. It is trained to rank recovery likelihood, not predict price.
         </p>
         <div className="mt-7 border-l-[3px] border-[#F0A024] bg-[#FFF8EC] px-6 py-5 text-[15px] leading-7 text-[#7C4605]">
           The prediction is made at the completed-quarter cutoff. Among stocks still unrecovered at quarter-end, the model estimates the chance of returning to baseline over the next 180 days.
@@ -253,7 +253,7 @@ export default function ModelAnalysis() {
           <span className="text-[#64748B]">Baseline&nbsp; 0.618</span>
           <span className="font-semibold text-[#05664F]">Model v3&nbsp; 0.668 (+0.050)</span>
         </div>
-        <p className="mt-3 text-sm leading-6 text-[#52637A]">Yes, by five points — a modest but real edge over always predicting the more common outcome.</p>
+        <p className="mt-3 text-sm leading-6 text-[#52637A]">Yes, by five points. That is a modest but real edge over always predicting the more common outcome.</p>
       </section>
 
       <section className="section-space-lg border-t border-[#D9E2EA]">
@@ -266,7 +266,7 @@ export default function ModelAnalysis() {
             </div>
           ))}
         </div>
-        <p className="mt-5 text-[15px] leading-7 text-[#52637A]">Of 1,610 eligible drawdown events, 361 were reserved as a final holdout — entirely unseen during training — to measure how well the model ranks real, out-of-sample recoveries.</p>
+        <p className="mt-5 text-[15px] leading-7 text-[#52637A]">Of 1,610 eligible drawdown events, 361 were reserved as a final holdout. These events were entirely unseen during training and measure how well the model ranks real, out-of-sample recoveries.</p>
       </section>
 
       <section className="section-space-lg border-t border-[#D9E2EA]">
@@ -291,7 +291,7 @@ export default function ModelAnalysis() {
               <li key={step} className="relative text-[15px] leading-6">
                 <span className={`absolute -left-[35px] top-1.5 h-2.5 w-2.5 rounded-full ${index === 6 ? 'bg-[#F0A024]' : 'bg-[#12355B]'}`} />
                 <span className="font-semibold text-[#0B1220]">{step}</span>
-                {detail && <span className="text-[#8A9AAF]"> — {detail}</span>}
+                {detail && <span className="text-[#8A9AAF]">: {detail}</span>}
               </li>
             ))}
           </ol>
@@ -322,7 +322,7 @@ export default function ModelAnalysis() {
 
       <Section eyebrow="06 · Evaluation integrity" title="Leakage audit"><div className="overflow-hidden rounded-2xl border border-[#D9E2EA]"><table className="w-full text-left text-sm"><tbody>{auditRows.map(([area,status]) => <tr key={area} className="border-b border-[#EEF2F6] last:border-0"><td className="px-5 py-3.5 text-[#334155]">{area}</td><td className={`px-5 py-3.5 text-right font-semibold ${status === 'Known limitation' ? 'text-[#B45309]' : 'text-[#12355B]'}`}>{status}</td></tr>)}</tbody></table></div><p className={`mt-6 ${bodyCopy}`}>The active model does not use future recovery-path fields as inputs. Labels are measured after the prediction date, immature outcomes are excluded, and chronological splits are purged to avoid label-window overlap.</p></Section>
 
-      <Section eyebrow="07 · Experiments" title="Experiments we tried and didn&apos;t ship"><div className="overflow-x-auto rounded-2xl border border-[#D9E2EA]"><table className="min-w-[860px] w-full text-left text-sm"><thead className="bg-[#F8FBFF] text-[11px] uppercase tracking-[0.14em] text-[#8A9AAF]"><tr><th className="px-5 py-3">Experiment</th><th className="px-5 py-3">What changed</th><th className="px-5 py-3">Result</th><th className="px-5 py-3">Decision</th></tr></thead><tbody>{experiments.map(row => <tr key={row[0]} className="border-t border-[#EEF2F6]"><td className="px-5 py-3.5 font-semibold">{row[0]}</td><td className="px-5 py-3.5 text-[#64748B]">{row[1]}</td><td className="px-5 py-3.5 text-[#64748B]">{row[2]}</td><td className="px-5 py-3.5 text-[#334155]">{row[3]}</td></tr>)}</tbody></table></div><p className={`mt-6 ${bodyCopy}`}>More complex experiments remain research artifacts unless they improve the fixed evaluation result. Model v3 remains active because it is simpler, interpretable, and more defensible for the selected production task.</p></Section>
+      <Section eyebrow="07 · Experiments" title="Experiments I tried and didn&apos;t ship"><div className="overflow-x-auto rounded-2xl border border-[#D9E2EA]"><table className="min-w-[860px] w-full text-left text-sm"><thead className="bg-[#F8FBFF] text-[11px] uppercase tracking-[0.14em] text-[#8A9AAF]"><tr><th className="px-5 py-3">Experiment</th><th className="px-5 py-3">What changed</th><th className="px-5 py-3">Result</th><th className="px-5 py-3">Decision</th></tr></thead><tbody>{experiments.map(row => <tr key={row[0]} className="border-t border-[#EEF2F6]"><td className="px-5 py-3.5 font-semibold">{row[0]}</td><td className="px-5 py-3.5 text-[#64748B]">{row[1]}</td><td className="px-5 py-3.5 text-[#64748B]">{row[2]}</td><td className="px-5 py-3.5 text-[#334155]">{row[3]}</td></tr>)}</tbody></table></div><p className={`mt-6 ${bodyCopy}`}>More complex experiments remain research artifacts unless they improve the fixed evaluation result. Model v3 remains active because it is simpler, interpretable, and more defensible for the selected production task.</p></Section>
 
       <Section eyebrow="08 · Survival-v1" title="Research extension: recovery probability over time"><span className="inline-flex rounded-full bg-[#EEF2F6] px-3 py-1 text-xs font-semibold text-[#52637A]">Research model · not production classifier</span><p className={`mt-5 ${bodyCopy}`}>Survival-v1 is a separate discrete-time hazard model. Instead of one 180-day outcome, it estimates cumulative recovery across 30, 60, 90, 180, and 365 days. The chart summarizes evaluation-cohort cumulative recovery rates as context, not the personalized survival curve shown on individual prediction pages.</p><p className="mt-4 text-sm text-[#64748B]"><span className="font-semibold text-[#C96A12]">Orange</span> marks horizons through the 180-day production classifier window; <span className="font-semibold text-[#64748B]">gray</span> shows the research-only 365-day extension.</p><SurvivalChart /><p className="mt-3 text-xs leading-5 text-[#7A899C]">The survival model helps explain when recovery accumulates, but long-horizon calibration is mixed and it has not replaced Model v3.</p></Section>
 
