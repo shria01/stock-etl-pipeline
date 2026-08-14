@@ -1,6 +1,6 @@
 # DrawdownIQ
 
-DrawdownIQ is a full-stack market data and ML project that studies major quarterly drawdowns among current S&P 500 comapnies and estimates whether stocks still below baseline at quarter-end recover during the next 180 days.
+DrawdownIQ is a full-stack market data and ML project that studies major quarterly drawdowns among current S&P 500 companies and estimates whether stocks still below baseline at quarter-end recover during the next 180 days.
 
 Live demo: [https://stock-etl-pipeline.vercel.app/](https://stock-etl-pipeline.vercel.app/)
 
