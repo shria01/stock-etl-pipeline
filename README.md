@@ -1,97 +1,36 @@
-# S&P 500 Recovery Cohort Analysis
- 
-I built this to answer a question: when an S&P 500 stock drops more than 15% in a quarter, how long does it actually take to recover, and does that depend on the sector, the size of the drop, or anything else you could predict ahead of time?
- 
-It's a full pipeline with real stock data pulled from APIs, loaded into Postgres, analyzed with SQL, and fed into a model that predicts whether a stock will bounce back fast or not.
- 
-**→ [Full analysis and findings: `Recovery Analysis SQL Project.ipynb`](Recovery%20Analysis%20SQL%20Project.ipynb)**
- 
-## What's in here
- 
-`extract/` pulls daily prices from Alpha Vantage and Yahoo Finance. `transform/` cleans that up into a consistent format. `load/` writes it into Postgres, using upserts so it's safe to re-run without creating duplicates. `sql/` has all the analysis quarterly returns, drop detection, recovery time, and the cohort queries. `ml/` has the model that predicts fast vs. slow recovery, and `tests/` covers the parts of the pipeline where a silent bug would actually matter.
- 
-## Scale
- 
-- 503 S&P 500 tickers, 10 years of daily prices (~1.2M rows)
-- 1,765 drop events (15%+ quarterly declines)
-- 6 engineered features per event, all point-in-time so there's no look-ahead bias
-  
-## What I found
- 
-Healthcare and Industrials recovered the fastest (around 266–280 days on average). Energy took almost twice as long, around 457 days — even though Energy stocks eventually recovered *more often* than most other sectors. So speed and likelihood of recovery turned out to be two different things.
- 
-I trained a Logistic Regression model at the final trading day of each completed drop quarter to predict whether the stock recovers within the following 180 days. Events already resolved by that cutoff are excluded, and every modeled event must have a fully observed 180-day label horizon. Model v3 uses a purged chronological split so no training or validation label horizon crosses into the following evaluation period. Its holdout reached 66.8% accuracy, 0.731 ROC AUC, and 0.596 PR AUC.
+# DrawdownIQ
 
-An accuracy-tuned experiment tested unweighted Logistic Regression, validation-selected thresholds, and three leakage-safe interactions. Validation selected a 0.80 threshold, but holdout accuracy fell to 64.0% and fast-recovery recall fell to 8%, so the experiment was not promoted over Model v3.
+DrawdownIQ is a full-stack market data and ML project that studies major quarterly drawdowns among current S&P 500 constituents and estimates whether stocks still below baseline at quarter-end recover during the next 180 days.
 
-A subsequent Model v4 research run added five point-in-time market-regime features and compared Elastic-Net Logistic Regression with shallow histogram boosting over four purged walk-forward folds. Elastic-Net won development selection, but scored 0.684 ROC AUC, 0.539 PR AUC, and 62.6% accuracy on the fixed final cohort. It was retained as an experiment rather than promoted; Model v3 remains active.
+Live demo: [https://stock-etl-pipeline.vercel.app/](https://stock-etl-pipeline.vercel.app/)
 
-Model v5 research tested 90-, 180-, and 365-day targets with compact features, bounce-only augmentation, drawdown-shape features, and label-available same-ticker history. Same-ticker history produced the best mean walk-forward PR AUC at all three horizons (0.448, 0.611, and 0.779 respectively), but its gains over the compact baseline were small. The full shape feature set underperformed the compact model at 180 and 365 days. Because the recent holdout has already been inspected, these results are documented as development evidence and are not used to replace Model v3.
+## What it does
 
-The project also includes a research discrete-time survival model with 1–30, 31–60, 61–90, 91–180, and 181–365 day hazard intervals. It retains fully observed intervals from right-censored events, purges training intervals by label-availability date, and converts conditional hazards into cumulative recovery curves. The unweighted `C=0.1` hazard Logistic Regression achieved walk-forward log loss 0.386. Its artifact is separate from the active classifier because it has not been evaluated on a new untouched cohort.
- 
-The first version of the model used a random train/test split and showed higher accuracy (~69%) but that number was inflated because random splitting let the model train on some future events and test on some past ones making it leak information it wouldn't have access to in real prediction. Switching to a time-based split gave an honest, lower number, and also surfaced that the simpler linear model generalized better across different market regimes than the more flexible Random Forest.
- 
-All the details and charts are in the notebook.
- 
-## Setup
- 
-**1. Start PostgreSQL:**
-```bash
-docker run -d --name stock_etl_db \
-  -e POSTGRES_USER=etl_user \
-  -e POSTGRES_PASSWORD=<your_password> \
-  -e POSTGRES_DB=stock_db \
-  -p 5432:5432 \
-  postgres:15
-```
- 
-**2. Set up environment:**
-```bash
-python3 -m venv venv && source venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env   # add your DB password and Alpha Vantage API key
-```
-(You only need an Alpha Vantage API key if you want to run `run_pipeline.py`. The main data load uses yfinance, no key required.)
- 
-**3. Build the schema:**
-```bash
-docker exec -i stock_etl_db psql -U etl_user -d stock_db < sql/schema.sql
-```
- 
-**4. Load the data:**
-```bash
-python3 -m scripts.load_symbols              # all 503 S&P 500 tickers
-python3 -m scripts.load_historical_prices    # 10 years of history, takes ~30-45 min
-```
- 
-**5. Run the SQL analysis, in order:**
-```bash
-docker exec -i stock_etl_db psql -U etl_user -d stock_db < sql/quarterly_returns.sql
-docker exec -i stock_etl_db psql -U etl_user -d stock_db < sql/drop_events.sql
-docker exec -i stock_etl_db psql -U etl_user -d stock_db < sql/ml_features.sql
-```
- 
-**6. Open the notebook:**
-```bash
-jupyter notebook "Recovery Analysis SQL Project.ipynb"
-```
- 
-**7. Or just run the model on its own:**
-```bash
-python3 -m ml.predict_recovery
-```
- 
-## About run_pipeline.py
- 
-This one's different from the backfill script. It's meant to run daily to keep prices up to date, not to load 10 years of history at once. Right now it's only wired up for a few tickers through Alpha Vantage since that's what I built it against early on, but the same logic works for all 503 tickers using `extract/yfinance_prices.py`.
- 
-```bash
-python3 run_pipeline.py
-```
- 
+- Builds SQL-defined drawdown events from daily price history
+- Uses quarter-end as the prediction cutoff
+- Trains a leakage-audited Logistic Regression classifier
+- Serves predictions through FastAPI
+- Displays recovery paths and model analysis in React
+
+## Model
+
+- **Active model:** Logistic Regression v3
+- **Target:** Recovery to baseline within 180 days after quarter-end
+- **Final holdout:** 361 events
+- **ROC AUC:** 0.731
+- **PR AUC:** 0.596
+
+## Dataset
+
+- 1.3M+ daily price rows
+- 1,894 raw drawdown events
+- 1,610 clean classifier events
+- 476 stocks represented
+
 ## Stack
- 
-Python, PostgreSQL, SQLAlchemy, pandas, scikit-learn, Jupyter, pytest
- 
- 
+
+Python, PostgreSQL, SQLAlchemy, scikit-learn, FastAPI, React, Vite, Tailwind CSS, and Recharts.
+
+## Limitations
+
+DrawdownIQ uses current S&P 500 constituents and current sector mappings, so it is not a survivorship-bias-free historical index backtest.
