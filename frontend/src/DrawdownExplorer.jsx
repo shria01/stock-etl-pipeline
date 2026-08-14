@@ -30,6 +30,12 @@ const inferenceSteps = [
   'Applying Model v3 preprocessing',
   'Scoring 180-day recovery probability',
 ];
+const inferenceStepLabels = [
+  'Load event',
+  'Build features',
+  'Preprocess',
+  'Score probability',
+];
 
 function parseDateOnly(value) {
   if (!value) return null;
@@ -1166,31 +1172,30 @@ function DrawdownExplorer({
     <div className="mx-auto max-w-[1180px] text-[#0B1220]">
 
       {isModelRunning && (
-        <div className="mx-auto mt-[18vh] w-full max-w-2xl border-y border-[#DDE7F0] py-10" role="status" aria-live="polite">
-          <div className="flex items-start gap-5">
-            <div className="mt-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#FFF4E5]">
-              <div className="h-5 w-5 animate-spin rounded-full border-2 border-[#F2C98D] border-t-[#C96A12]" />
+        <div className="mx-auto mt-[18vh] w-full max-w-2xl border-y border-[#DDE7F0] py-7" role="status" aria-live="polite">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2.5">
+              <div className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-[#F2C98D] border-t-[#C96A12]" />
+              <p className="text-base font-semibold text-[#0B1220]">Running Model v3</p>
             </div>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center justify-between gap-4">
-                <p className="text-base font-semibold text-[#0B1220]">Running Model v3</p>
-                <span className="font-mono text-xs text-[#8A9AAF]">Step {inferenceStep + 1} of 4</span>
-              </div>
-              <p className="mt-2 text-sm text-[#52637A]">{inferenceSteps[inferenceStep]}</p>
-              <div className="mt-5 h-1.5 overflow-hidden rounded-full bg-[#E8EEF4]">
-                <div
-                  className="h-full rounded-full bg-[#C96A12] transition-[width] duration-500 ease-out"
-                  style={{ width: `${[18, 43, 70, 94][inferenceStep]}%` }}
-                />
-              </div>
-              <div className="mt-5 grid gap-2 font-mono text-xs text-[#64748B] sm:grid-cols-2">
-                {inferenceSteps.map((step, index) => (
-                  <span key={step} className={index <= inferenceStep ? 'text-[#0B1220]' : 'text-[#A8B5C5]'}>
-                    {index < inferenceStep ? '✓' : index === inferenceStep ? '●' : '○'} {step}
-                  </span>
-                ))}
-              </div>
-            </div>
+            <span className="font-mono text-[11px] text-[#8A9AAF]">Step {inferenceStep + 1} of 4</span>
+          </div>
+          <p className="mt-2 text-sm text-[#52637A]">{inferenceSteps[inferenceStep]}</p>
+          <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-[#E8EEF4]">
+            <div
+              className="h-full rounded-full bg-[#C96A12] transition-[width] duration-500 ease-out"
+              style={{ width: `${[18, 43, 70, 94][inferenceStep]}%` }}
+            />
+          </div>
+          <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 font-mono text-[10px]">
+            {inferenceStepLabels.map((step, index) => (
+              <span
+                key={step}
+                className={index < inferenceStep ? 'text-[#8A9AAF]' : index === inferenceStep ? 'text-[#C96A12]' : 'text-[#B6C0CD]'}
+              >
+                {index < inferenceStep ? '✓' : index === inferenceStep ? '●' : '○'} {step}
+              </span>
+            ))}
           </div>
         </div>
       )}

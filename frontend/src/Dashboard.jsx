@@ -369,12 +369,12 @@ function Dashboard({ token, onSignIn, onRegister, onGoToPredict, onGoToHistory, 
       [
         'Baseline',
         'Reference price',
-        'Quarter-start adjusted close.',
+        'Closing price at the start of the quarter.',
       ],
       [
         'Drawdown',
         'Quarter low',
-        'Lowest adjusted close during the quarter the event began.',
+        'Lowest closing price during the quarter the event began.',
       ],
       [
         'Prediction date',
